@@ -8,7 +8,6 @@ from src.components.Styles import GeneralStyleMixin
 class ProjectCreationDialog(QtWidgets.QDialog):
     def __init__(self, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
-        self.formResult = None
 
         # Window size
         self.setMinimumWidth(700)
@@ -42,7 +41,7 @@ class ProjectCreationDialog(QtWidgets.QDialog):
 
         # Buttons
         createButton = QtWidgets.QPushButton("Create", self)
-        createButton.clicked.connect(self.onAccept)
+        createButton.clicked.connect(self.createProject)
         self.layout.addWidget(createButton)
 
         cancelButton = QtWidgets.QPushButton("Cancel", self)
@@ -54,9 +53,18 @@ class ProjectCreationDialog(QtWidgets.QDialog):
         if directory:
             self.datasetDirLineEdit.setText(directory)
 
-    def onAccept(self):
-        path = Path(self.datasetDirLineEdit.text())
+    def createProject(self):
+        datasetDir = self.datasetDirLineEdit.text()
+        if not datasetDir:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                "Dataset directory is a required field.",
+                QtWidgets.QMessageBox.Close
+            )
+            return
 
+        path = Path(datasetDir)
         if not path.exists() or not path.is_dir():
             QtWidgets.QMessageBox.critical(
                 self,
@@ -66,17 +74,17 @@ class ProjectCreationDialog(QtWidgets.QDialog):
             )
             return
 
-        self.formResult = ProjectCreationForm(
-            name=self.nameLineEdit.text(),
-            datasetDir=path,
-            description=self.descriptionTextEdit.toPlainText()
-        )
+        # TODO: additional validation
         self.accept()
 
     def showDialog(self):
         dialogResult = self.exec_()
         if dialogResult == QtWidgets.QDialog.Accepted:
-            return self.formResult
+            return ProjectCreationForm(
+                name=self.nameLineEdit.text(),
+                datasetDir=Path(self.datasetDirLineEdit.text()),
+                description=self.descriptionTextEdit.toPlainText()
+            )
         return None
 
 

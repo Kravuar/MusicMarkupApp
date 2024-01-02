@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from PyQt5 import QtWidgets
 from src.components.Styles import GeneralStyleMixin
@@ -9,7 +10,6 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
 
     def __init__(self, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
-        self.formResult = None
 
         # Window size
         self.setMinimumWidth(700)
@@ -33,7 +33,7 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
 
         # Open Button
         openButton = QtWidgets.QPushButton("Open", self)
-        openButton.clicked.connect(self.onAccept)
+        openButton.clicked.connect(self.openProject)
         self.layout.addWidget(openButton)
 
         # Cancel Button
@@ -46,19 +46,37 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
         if file:
             self.projectFile.setText(file)
 
-    def onAccept(self):
-        self.formResult = {
-            'project_file': self.projectFile.text()
-        }
+    def openProject(self):
+        projectFile = self.projectFile.text()
+        if not projectFile:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                "Project file is a required field.",
+                QtWidgets.QMessageBox.Close
+            )
+            return
+
+        path = Path(projectFile)
+        if not path.exists() or not path.is_file():
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                "The selected file does not exist or is not a valid project file.",
+                QtWidgets.QMessageBox.Close
+            )
+            return
+
+        # TODO: additional validation
         self.accept()
 
     def showDialog(self):
         dialogResult = self.exec_()
         if dialogResult == QtWidgets.QDialog.Accepted:
-            return self.formResult
+            return ExistingProjectForm(Path(self.projectFile.text()))
         return None
 
 
 @dataclass
 class ExistingProjectForm:
-    path: str
+    path: Path

@@ -1,10 +1,10 @@
 from PyQt5 import QtWidgets
-from src.components.PageWindow import PageWindow
+from src.components.WindowPage import WindowPage
 from src.components.dialogs.OpenExistingProjectDialog import OpenExistingProjectDialog
 from src.components.dialogs.ProjectCreationDialog import ProjectCreationDialog
 
 
-class MainPage(PageWindow):
+class MainPage(WindowPage):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Main Page")
@@ -24,11 +24,10 @@ class MainPage(PageWindow):
         project_creation_dialog = ProjectCreationDialog(self)
         result = project_creation_dialog.showDialog()
         if result:
-            self.goto("project")
+            self.goto("project", result)
 
     def onOpenExisting(self):
         open_existing_dialog = OpenExistingProjectDialog(self)
         result = open_existing_dialog.showDialog()
         if result:
-            print("Project Opened:", result.path)
-            self.goto("project")
+            self.goto("project", result)

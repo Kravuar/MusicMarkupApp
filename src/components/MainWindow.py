@@ -1,11 +1,11 @@
 from PyQt5 import QtWidgets, QtCore
-from src.components.PageWindow import PageWindow
+from src.components.WindowPage import WindowPage, GotoPayload
 from src.components.Styles import GeneralStyleMixin
 from src.components.pages.MainPage import MainPage
 from src.components.pages.ProjectPage import ProjectPage
 
 
-class Window(QtWidgets.QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         GeneralStyleMixin.applyStyle(self)
@@ -23,16 +23,17 @@ class Window(QtWidgets.QMainWindow):
         self.registerPage(MainPage(), "main")
         self.registerPage(ProjectPage(), "project")
 
-        self.goto("main")
+        self.goto(GotoPayload("main"))
 
-    def registerPage(self, widget: PageWindow, name):
-        self.pages[name] = widget
-        self.stackedWidget.addWidget(widget)
-        widget.gotoSignal.connect(self.goto)
+    def registerPage(self, page: WindowPage, name: str):
+        self.pages[name] = page
+        self.stackedWidget.addWidget(page)
+        page.gotoSignal.connect(self.goto)
 
-    @QtCore.pyqtSlot(str)
-    def goto(self, name):
-        if name in self.pages:
-            page = self.pages[name]
+    @QtCore.pyqtSlot(GotoPayload)
+    def goto(self, payload: GotoPayload):
+        if payload.name in self.pages:
+            page = self.pages[payload.name]
             self.stackedWidget.setCurrentWidget(page)
             self.setWindowTitle(page.windowTitle())
+            page.onEnter(payload.data)
