@@ -1,15 +1,9 @@
-from dataclasses import dataclass
 from typing import Any
 
 from PyQt5 import QtCore, QtWidgets
 
-from src.components.Styles import GeneralStyleMixin
-
-
-@dataclass
-class GotoPayload:
-    name: str
-    data: Any = None
+from src.components.multipage import GotoPayload
+from src.components.widgets.style.Styles import GeneralStyleMixin
 
 
 class WindowPage(QtWidgets.QWidget):

@@ -1,11 +1,14 @@
 from PyQt5 import QtWidgets, QtCore
-from src.components.WindowPage import WindowPage, GotoPayload
-from src.components.Styles import GeneralStyleMixin
-from src.components.pages.MainPage import MainPage
-from src.components.pages.ProjectPage import ProjectPage
+from src.components.multipage import GotoPayload
+from src.components.widgets.multipage.WindowPage import WindowPage
+from src.components.widgets.style.Styles import GeneralStyleMixin
+from src.components.widgets.pages.MainPage import MainPage
+from src.components.widgets.pages.ProjectPage import ProjectPage
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    TITLE = "Music Markup"
+
     def __init__(self, parent=None):
         super().__init__(parent)
         GeneralStyleMixin.applyStyle(self)
@@ -15,7 +18,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1000, 700)
 
         # Page container
-        self.stackedWidget = QtWidgets.QStackedWidget()
+        self.stackedWidget = QtWidgets.QStackedWidget(self)
         self.setCentralWidget(self.stackedWidget)
         self.pages = {}
 

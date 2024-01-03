@@ -1,7 +1,7 @@
 import sys
 from PyQt5 import QtWidgets
-from src.components.MainWindow import MainWindow
 
+from src.components.widgets.multipage.MainWindow import MainWindow
 
 app = QtWidgets.QApplication(sys.argv)
 w = MainWindow()
