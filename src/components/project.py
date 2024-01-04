@@ -1,65 +1,102 @@
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
+
 import pandas as pd
 import pickle
 
-from src.components.integrity import calculateChecksum, validateDatasetIntegrity
-
-
-@dataclass
-class MarkupSettings:
-    # TODO: fragment size, overlap factor. Those can be changed at any time.
-    # TODO: manual fragmentation with sliders and stuff.
-    pass
+from src.components.integrity import calculateDirectoryChecksum, validateDirectoryIntegrity, ChecksumError
+from src.components.markup import MarkupSettings
+from src.components.markupIndex import MarkupIndex
+from src.internalSettings import AUDIO_FILES_PATTERN
 
 
 class Project:
-    name: str
-    description: str
-    datasetDir: Path
-    projectFile: Path
-    markupSettings: MarkupSettings
-    markupDataset: pd.DataFrame
-    datasetDirChecksum: str  # TODO: maintain something like index structure
-    currentFileIdx: int  # to be able to recover project upon dataset changes
-
     def __init__(self, name: str, description: str, projectFileDir: Path, datasetDir: Path):
         self.name = name
         self.description = description
-        self.datasetDir = datasetDir
-        self.projectFile = projectFileDir / (self.name + '.mmp')
-        self.markupSettings = MarkupSettings()
-        self.markupDataset = pd.DataFrame(columns=['relativePath', 'start', 'end', 'description'])
-        self.datasetDirChecksum = calculateChecksum(self.datasetDir)  # TODO: parallelize this
-        self.currentFileIdx = 0
+        self._datasetDir = datasetDir
+        self._projectFile = projectFileDir / (self.name + '.mmp')
+        self._markupSettings = MarkupSettings()
+        self._markupDataFrame = pd.DataFrame(columns=['checksum', 'relativePath', 'start', 'end', 'description'])
+        self._markupIndex = MarkupIndex(self._datasetDir, AUDIO_FILES_PATTERN)
+        # TODO: parallelize checksum?
+        self._datasetDirChecksum = calculateDirectoryChecksum(
+            self._datasetDir,
+            AUDIO_FILES_PATTERN
+        )
+
+    @classmethod
+    def loadProject(cls, path: Path) -> Self:
+        if not path.exists() or not path.is_file() or path.suffix != '.mm':
+            raise FileNotFoundError(f"Invalid project file: {path}")
+        try:
+            with open(path, 'rb') as file:
+                loaded_project = pickle.load(file)
+                if not isinstance(loaded_project, Project):
+                    raise TypeError("File does not contain MM project.")
+                validateDirectoryIntegrity(
+                    loaded_project.datasetDir,
+                    AUDIO_FILES_PATTERN,
+                    loaded_project.datasetDirChecksum
+                )
+                return loaded_project
+        except ChecksumError as e:
+            raise ProjectCorruptedException(loaded_project) from e
+        except Exception as e:
+            raise pickle.PickleError(f"Failed to load project from {path}: {e}")
+
+    def restore(self):
+        self._markupIndex.updateState()
+        toUpdate = self._markupDataFrame[self._markupDataFrame['checksum'].isin(self._markupIndex)]
+        updated = toUpdate['checksum'].map(lambda checksum: self._markupIndex.state[checksum].relativePath)
+        self._markupDataFrame.loc[toUpdate.index, 'relativePath'] = updated
+
+    def save(self):
+        try:
+            validateDirectoryIntegrity(
+                self.datasetDir,
+                AUDIO_FILES_PATTERN,
+                self.datasetDirChecksum
+            )
+            with open(self.projectFile, 'wb') as file:
+                pickle.dump(self, file)
+        except ChecksumError as e:
+            raise ProjectCorruptedException(self) from e
+        except Exception as e:
+            raise pickle.PickleError(f"Failed to save project to {self.projectFile}: {e}")
+
+    def exportMarkup(self, path: Path):
+        try:
+            with open(path, 'wb') as file:
+                pickle.dump(self.markupDataFrame, file)
+        except Exception as e:
+            raise RuntimeError(f"Failed to export markup to {path}: {e}")
+
+    @property
+    def datasetDir(self):
+        return self._datasetDir
+
+    @property
+    def projectFile(self):
+        return self._projectFile
+
+    @property
+    def markupSettings(self):
+        return self._markupSettings
+
+    @property
+    def markupDataFrame(self):
+        return self._markupDataFrame
+
+    @property
+    def datasetDirChecksum(self):
+        return self._datasetDirChecksum
 
 
-def loadProject(path: Path) -> Project:
-    if not path.exists() or not path.is_file() or path.suffix != '.mm':
-        raise FileNotFoundError(f"Invalid project file: {path}")
-    try:
-        with open(path, 'rb') as file:
-            loaded_project = pickle.load(file)
-            if not isinstance(loaded_project, Project):
-                raise TypeError("File does not contain MM project.")
-            validateDatasetIntegrity(loaded_project.datasetDir, loaded_project.datasetDirChecksum)
-            return loaded_project
-    except Exception as e:
-        raise pickle.PickleError(f"Failed to load project from {path}: {e}")
+class ProjectCorruptedException(Exception):
+    def __init__(self, project: Project):
+        self._project = project
 
-
-def saveProject(project: Project):
-    validateDatasetIntegrity(project.datasetDir, project.datasetDirChecksum)
-    try:
-        with open(project.projectFile, 'wb') as file:
-            pickle.dump(project, file)
-    except Exception as e:
-        raise pickle.PickleError(f"Failed to save project to {project.projectFile}: {e}")
-
-
-def exportMarkup(project: Project, path: Path):
-    try:
-        with open(path, 'wb') as file:
-            pickle.dump(project.markupDataset, file)
-    except Exception as e:
-        raise RuntimeError(f"Failed to export markup to {path}: {e}")
+    @property
+    def project(self):
+        return self._project

@@ -1,10 +1,9 @@
 from PyQt5 import QtWidgets
-from dataclasses import dataclass
 from pathlib import Path
 
 from src.components.formValidation import validateRequiredField, __validateRequiredPath__, showErrorMessage, \
     validateRequiredDirectory
-from src.components.project import Project, saveProject
+from src.components.project import Project
 from src.components.widgets.style.Styles import GeneralStyleMixin
 
 
@@ -97,7 +96,7 @@ class ProjectCreationDialog(QtWidgets.QDialog):
                 Path(self.projectFileDirectoryLineEdit.text()),
                 Path(self.datasetDirectoryLineEdit.text()),
             )
-            saveProject(self.project)
+            self.project.save()
             self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(

@@ -1,4 +1,5 @@
 import sys
+
 from PyQt5 import QtWidgets
 
 from src.components.widgets.multipage.MainWindow import MainWindow

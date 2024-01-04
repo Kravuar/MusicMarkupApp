@@ -1,10 +1,9 @@
-from dataclasses import dataclass
 from pathlib import Path
 
 from PyQt5 import QtWidgets
 
 from src.components.formValidation import showErrorMessage, validateRequiredFile
-from src.components.project import loadProject, Project
+from src.components.project import Project, ProjectCorruptedException
 from src.components.widgets.style.Styles import GeneralStyleMixin
 
 
@@ -56,8 +55,12 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
         return None
 
     def browseProjectFile(self):
-        file, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Project File", "",
-                                                        OpenExistingProjectDialog.project_file_filter)
+        file, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Project File",
+            "",
+            OpenExistingProjectDialog.project_file_filter
+        )
         if file:
             self.projectFile.setText(file)
 
@@ -68,8 +71,19 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
             return
 
         try:
-            self.project = loadProject(Path(self.projectFile.text()))
+            self.project = Project.loadProject(Path(self.projectFile.text()))
             self.accept()
+        except ProjectCorruptedException as e:
+            result = QtWidgets.QMessageBox.critical(
+                None,
+                "Project Changes Detected",
+                "Changes have been detected in the project dataset directory.\nDo you want to restore the project?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+            if result == QtWidgets.QMessageBox.Yes:
+                self.project = e.project
+                self.project.restore()
+                self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
                 self,
@@ -80,6 +94,6 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
 
     def __validate__(self):
         errors = dict(filter(None, [
-            validateRequiredFile(Path(self.projectFile.text()), "Project File"),
+            validateRequiredFile(self.projectFile.text(), "Project File"),
         ]))
         return errors

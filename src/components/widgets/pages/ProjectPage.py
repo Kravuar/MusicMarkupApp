@@ -2,7 +2,6 @@ from typing import Any
 
 from PyQt5 import QtWidgets
 
-from src.components.project import saveProject
 from src.components.project import Project
 from src.components.widgets.multipage.WindowPage import WindowPage
 
@@ -43,7 +42,7 @@ class ProjectPage(WindowPage):
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel
         )
         if answer == QtWidgets.QMessageBox.Yes:
-            saveProject(self.project)
+            self.project.save()
         elif answer == QtWidgets.QMessageBox.Cancel:
             return
         self.goto("main")
