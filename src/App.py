@@ -2,9 +2,9 @@ import sys
 
 from PyQt5 import QtWidgets
 
-from src.components.widgets.multipage.MainWindow import MainWindow
+from src.ui.window import MainWindow
 
 app = QtWidgets.QApplication(sys.argv)
-w = MainWindow()
-w.show()
+window = MainWindow()
+window.show()
 sys.exit(app.exec_())
