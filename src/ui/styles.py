@@ -5,7 +5,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import QColor
 
 
-def sigmoid(x, slope=1, midpoint=0.5):
+def _sigmoid(x, slope=1, midpoint=0.5):
     return 1 / (1 + math.exp(-slope * (x - midpoint)))
 
 
@@ -35,7 +35,7 @@ class GeneralStyleMixin:
 
         for i in range(num_steps + 1):
             position = i / num_steps
-            blend_factor = sigmoid(position, 2, midpoint=1.7)
+            blend_factor = _sigmoid(position, 2, midpoint=1.7)
             color = blend_colors(GeneralStyleMixin.main_color, GeneralStyleMixin.accent_color, blend_factor)
             gradient.setColorAt(position, color)
 

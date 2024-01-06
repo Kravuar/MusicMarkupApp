@@ -14,25 +14,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1000, 700)
 
         # Page container
-        self.stacked_widget = QtWidgets.QStackedWidget(self)
-        self.setCentralWidget(self.stacked_widget)
-        self.pages = {}
+        self._stacked_widget = QtWidgets.QStackedWidget(self)
+        self.setCentralWidget(self._stacked_widget)
+        self._pages = {}
 
         # Pages
-        self.register_page(MainPage(), "main")
-        self.register_page(ProjectPage(), "project")
+        self._register_page(MainPage(), "main")
+        self._register_page(ProjectPage(), "project")
 
-        self.goto(GotoPayload("main"))
+        self._goto(GotoPayload("main"))
 
-    def register_page(self, page: WindowPage, name: str):
-        self.pages[name] = page
-        self.stacked_widget.addWidget(page)
-        page.goto_signal.connect(self.goto)
+    def _register_page(self, page: WindowPage, name: str):
+        self._pages[name] = page
+        self._stacked_widget.addWidget(page)
+        page.goto_signal.connect(self._goto)
 
     @QtCore.pyqtSlot(GotoPayload)
-    def goto(self, payload: GotoPayload):
-        if payload.name in self.pages:
-            page = self.pages[payload.name]
-            self.stacked_widget.setCurrentWidget(page)
+    def _goto(self, payload: GotoPayload):
+        if payload.name in self._pages:
+            page = self._pages[payload.name]
+            self._stacked_widget.setCurrentWidget(page)
             self.setWindowTitle(page.windowTitle())
             page.on_enter(payload.data)

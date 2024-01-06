@@ -16,45 +16,45 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
         self.setWindowTitle("Open Project")
 
         # State
-        self.project: Project | None = None
+        self._project: Project | None = None
 
         # Window size
         self.setMinimumWidth(700)
 
         # Layout
-        self.layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
 
         # Project file
-        self.layout.addWidget(QtWidgets.QLabel("Project file:", self))
-        self.project_file = QtWidgets.QLineEdit(self)
+        layout.addWidget(QtWidgets.QLabel("Project file:", self))
+        self._project_file_line_edit = QtWidgets.QLineEdit(self)
         browse_button = QtWidgets.QPushButton("Browse", self)
-        browse_button.clicked.connect(self.browse_project_file)
+        browse_button.clicked.connect(self._browse_project_file)
 
         dir_layout = QtWidgets.QHBoxLayout()
-        dir_layout.addWidget(self.project_file)
+        dir_layout.addWidget(self._project_file_line_edit)
         dir_layout.addWidget(browse_button)
-        self.layout.addLayout(dir_layout)
+        layout.addLayout(dir_layout)
 
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
 
         open_button = QtWidgets.QPushButton("Open", self)
-        open_button.clicked.connect(self.open_project)
+        open_button.clicked.connect(self._open_project)
         button_layout.addWidget(open_button)
 
         cancel_button = QtWidgets.QPushButton("Cancel", self)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
 
-        self.layout.addLayout(button_layout)
+        layout.addLayout(button_layout)
 
     def show_dialog(self):
         dialog_result = self.exec_()
         if dialog_result == QtWidgets.QDialog.Accepted:
-            return self.project
+            return self._project
         return None
 
-    def browse_project_file(self):
+    def _browse_project_file(self):
         file, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "Select Project File",
@@ -62,16 +62,16 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
             OpenExistingProjectDialog.project_file_filter
         )
         if file:
-            self.project_file.setText(file)
+            self._project_file_line_edit.setText(file)
 
-    def open_project(self):
-        errors = self.__validate__()
+    def _open_project(self):
+        errors = self._validate()
         if errors:
             show_error_message(errors, self)
             return
 
         try:
-            self.project = Project.load(Path(self.project_file.text()))
+            self._project = Project.load(Path(self._project_file_line_edit.text()))
             self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
@@ -81,9 +81,9 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.Close
             )
 
-    def __validate__(self):
+    def _validate(self):
         errors = dict(filter(None, [
-            validate_required_file(self.project_file.text(), "Project File"),
+            validate_required_file(self._project_file_line_edit.text(), "Project File"),
         ]))
         return errors
 
@@ -95,89 +95,89 @@ class ProjectCreationDialog(QtWidgets.QDialog):
         self.setWindowTitle("Create Project")
 
         # State
-        self.project: Project | None = None
+        self._project: Project | None = None
 
         # Window size
         self.setMinimumWidth(700)
 
         # Layout
-        self.layout = QtWidgets.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
 
         # Project name
-        self.layout.addWidget(QtWidgets.QLabel("Name:", self))
-        self.name_line_edit = QtWidgets.QLineEdit(self)
-        self.layout.addWidget(self.name_line_edit)
+        layout.addWidget(QtWidgets.QLabel("Name:", self))
+        self._name_line_edit = QtWidgets.QLineEdit(self)
+        layout.addWidget(self._name_line_edit)
 
         # Description
-        self.layout.addWidget(QtWidgets.QLabel("Description:", self))
-        self.description_text_edit = QtWidgets.QTextEdit(self)
-        self.layout.addWidget(self.description_text_edit)
+        layout.addWidget(QtWidgets.QLabel("Description:", self))
+        self._description_text_edit = QtWidgets.QTextEdit(self)
+        layout.addWidget(self._description_text_edit)
 
         # Project file path
-        self.layout.addWidget(QtWidgets.QLabel("Project File Path:", self))
-        self.project_file_directory_line_edit = QtWidgets.QLineEdit(self)
+        layout.addWidget(QtWidgets.QLabel("Project File Path:", self))
+        self._project_file_directory_line_edit = QtWidgets.QLineEdit(self)
         browse_button = QtWidgets.QPushButton("Browse", self)
-        browse_button.clicked.connect(self.browse_project_file_directory)
+        browse_button.clicked.connect(self._browse_project_file_directory)
 
         project_directory_input_layout = QtWidgets.QHBoxLayout()
-        project_directory_input_layout.addWidget(self.project_file_directory_line_edit)
+        project_directory_input_layout.addWidget(self._project_file_directory_line_edit)
         project_directory_input_layout.addWidget(browse_button)
-        self.layout.addLayout(project_directory_input_layout)
+        layout.addLayout(project_directory_input_layout)
 
         # Dataset directory
-        self.layout.addWidget(QtWidgets.QLabel("Dataset Directory:", self))
-        self.dataset_directory_line_edit = QtWidgets.QLineEdit(self)
+        layout.addWidget(QtWidgets.QLabel("Dataset Directory:", self))
+        self._dataset_directory_line_edit = QtWidgets.QLineEdit(self)
         browse_button = QtWidgets.QPushButton("Browse", self)
-        browse_button.clicked.connect(self.browse_dataset_directory)
+        browse_button.clicked.connect(self._browse_dataset_directory)
 
         dataset_directory_input_layout = QtWidgets.QHBoxLayout()
-        dataset_directory_input_layout.addWidget(self.dataset_directory_line_edit)
+        dataset_directory_input_layout.addWidget(self._dataset_directory_line_edit)
         dataset_directory_input_layout.addWidget(browse_button)
-        self.layout.addLayout(dataset_directory_input_layout)
+        layout.addLayout(dataset_directory_input_layout)
 
         # Buttons
         button_layout = QtWidgets.QHBoxLayout()
 
         create_button = QtWidgets.QPushButton("Create", self)
-        create_button.clicked.connect(self.create_project)
+        create_button.clicked.connect(self._create_project)
         button_layout.addWidget(create_button)
 
         cancel_button = QtWidgets.QPushButton("Cancel", self)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
 
-        self.layout.addLayout(button_layout)
+        layout.addLayout(button_layout)
 
     def show_dialog(self):
         dialog_result = self.exec_()
         if dialog_result == QtWidgets.QDialog.Accepted:
-            return self.project
+            return self._project
         return None
 
-    def browse_project_file_directory(self):
+    def _browse_project_file_directory(self):
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Project File Directory")
         if directory:
-            self.project_file_directory_line_edit.setText(directory)
+            self._project_file_directory_line_edit.setText(directory)
 
-    def browse_dataset_directory(self):
+    def _browse_dataset_directory(self):
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Dataset Directory")
         if directory:
-            self.dataset_directory_line_edit.setText(directory)
+            self._dataset_directory_line_edit.setText(directory)
 
-    def create_project(self):
-        errors = self.__validate__()
+    def _create_project(self):
+        errors = self._validate()
         if errors:
             show_error_message(errors, self)
             return
 
         try:
-            self.project = Project(
-                self.name_line_edit.text(),
-                self.description_text_edit.toPlainText(),
-                Path(self.project_file_directory_line_edit.text()),
-                Path(self.dataset_directory_line_edit.text()),
+            self._project = Project(
+                self._name_line_edit.text(),
+                self._description_text_edit.toPlainText(),
+                Path(self._project_file_directory_line_edit.text()),
+                Path(self._dataset_directory_line_edit.text()),
             )
-            self.project.save()
+            self._project.save()
             self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
@@ -187,10 +187,10 @@ class ProjectCreationDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.Close
             )
 
-    def __validate__(self):
+    def _validate(self):
         errors = dict(filter(None, [
-            validate_required_field(self.name_line_edit.text(), "Name"),
-            validate_required_directory(self.dataset_directory_line_edit.text(), "Dataset directory"),
-            validate_required_directory(self.project_file_directory_line_edit.text(), "Project file directory")
+            validate_required_field(self._name_line_edit.text(), "Name"),
+            validate_required_directory(self._dataset_directory_line_edit.text(), "Dataset directory"),
+            validate_required_directory(self._project_file_directory_line_edit.text(), "Project file directory")
         ]))
         return errors

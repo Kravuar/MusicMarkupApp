@@ -5,8 +5,8 @@ import pandas as pd
 import pickle
 
 from src.app.markup import MarkupSettings
-from src.app.markup_index import MarkupIndex
-from src.config import AUDIO_FILES_PATTERN, PROJECT_FILE_SUFFIX
+from src.app.markup_index import MarkupIndex, MarkupIteratorFilterMode, MarkupIteratorOrderMode
+from src.config import AUDIO_FILES_PATTERN, PROJECT_FILE_SUFFIX, MARKUP_FILE_SUFFIX
 
 
 class Project:
@@ -21,6 +21,15 @@ class Project:
             index=pd.Index([], name='checksum')
         )
         self._markup_index = MarkupIndex(self._dataset_dir, AUDIO_FILES_PATTERN)  # TODO: parallelize checksum?
+
+    def get_dataset_iterator(self, filter_mode: MarkupIteratorFilterMode, order_mode: MarkupIteratorOrderMode):
+        return self._markup_index.get_iterator(filter_mode, order_mode)
+
+    def add_entry(self, checksum: str, relative_path: Path, start: float, end: float, description: str):
+        self._markup_dataframe[checksum] = [relative_path, start, end, description]
+
+    def find_entries(self, checksum: str):
+        return self._markup_dataframe[self._markup_dataframe['checksum'] == checksum]
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -57,15 +66,14 @@ class Project:
             raise pickle.PickleError(f"Failed to save project to {self.project_file}: {e}")
 
     def export_markup(self, path: Path):
+        if not path.exists() or not path.is_dir():
+            raise ValueError("Path should be an existing directory.")
+        path = path / (self.name + MARKUP_FILE_SUFFIX)
         try:
             with open(path, 'wb') as file:
-                pickle.dump(self.markup_data_frame, file)
+                pickle.dump(self._markup_dataframe, file)
         except Exception as e:
             raise RuntimeError(f"Failed to export markup to {path}: {e}")
-
-    @property
-    def dataset_dir(self):
-        return self._dataset_dir
 
     @property
     def project_file(self):
@@ -78,7 +86,3 @@ class Project:
     @property
     def markup_settings(self):
         return self._markup_settings
-
-    @property
-    def markup_data_frame(self):
-        return self._markup_dataframe
