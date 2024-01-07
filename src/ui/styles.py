@@ -5,49 +5,152 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import QColor
 
 
-def _sigmoid(x, slope=1, midpoint=0.5):
-    return 1 / (1 + math.exp(-slope * (x - midpoint)))
+def blend_colors(color1: QColor, color2: QColor, factor: float):
+    r = int(color1.red() + factor * (color2.red() - color1.red()))
+    g = int(color1.green() + factor * (color2.green() - color1.green()))
+    b = int(color1.blue() + factor * (color2.blue() - color1.blue()))
+    return QtGui.QColor(r, g, b)
 
 
-def blend_colors(color1: QColor, color2: QColor, ratio: float):
-    r = int(color1.red() * (1 - ratio) + color2.red() * ratio)
-    g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
-    b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
+class GlobalStyle:
+    _icon_path = Path("assets/icon.png")
+    _white = QColor('#ffffff')
+    _gray_lightest = QColor('#f8f7f8')
+    _gray_lighter = QColor('#e5e4e4')
+    _gray_light = QColor('#d1d0d1')
+    _gray = QColor('#bebdbe')
+    _gray_dark = QColor('#969696')
+    _gray_darker = QColor('#6f6e6f')
+    _gray_darkest = QColor('#484848')
+    _black = QColor('#212021')
 
-    return QColor(r, g, b, 255)
+    _brand_light = QColor('#d5bfd2')
+    _brand = QColor('#550055')
+    _brand_dark = QColor('#2d0c2c')
 
+    _cta_light = QColor('#c8d2bc')
+    _cta = QColor('#2b5500')
+    _cta_dark = QColor('#1b2c08')
 
-class GeneralStyleMixin:
-    icon_path = str(Path("assets/icon.png").resolve())
+    _info_light = QColor('#daecf6')
+    _info = QColor('#58b3db')
+    _info_dark = QColor('#315667')
 
-    main_color = QColor("#505")
-    accent_color = QColor("#DFA")
+    _warning_light = QColor('#fcebce')
+    _warning = QColor('#dfb136')
+    _warning_dark = QColor('#6a5521')
 
-    text_color = QtCore.Qt.white
-    button_text_color = QtCore.Qt.black
+    _success_light = QColor('#d9f0d3')
+    _success = QColor('#5bc150')
+    _success_dark = QColor('#325c2b')
+
+    _danger_light = QColor('#ffcfce')
+    _danger = QColor('#dd2749')
+    _danger_dark = QColor('#6a1f27')
 
     @staticmethod
-    def apply_style(widget: QtWidgets.QWidget):
-        widget.setWindowIcon(QtGui.QIcon(GeneralStyleMixin.icon_path))
+    def create_stylesheet():
+        stylesheet = f"""
+            * {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 24px;
+                color: {GlobalStyle._gray_darkest.name()};
+            }}
+            
+            QMainWindow {{
+                background: {GlobalStyle._gray_lightest.name()};
+            }}
+            
+            QWidget {{
+                color: {GlobalStyle._black.name()};
+            }}
+            
+            QAbstractButton {{
+                background: {GlobalStyle._brand_light.name()};
+                border: none;
+                border-radius: 5px;
+                padding: 10px;
+                color: {GlobalStyle._white.name()};
+            }}
+            
+            QAbstractButton:hover {{
+                background: {GlobalStyle._brand.name()};
+            }}
+            
+            QAbstractButton:pressed {{
+                background: {GlobalStyle._brand_dark.name()};
+            }}
+            
+            QLineEdit, QTextEdit {{
+                padding: 6px;
+            }}
+            
+            QLineEdit, QTextEdit {{
+                background: {GlobalStyle._white.name()};
+                border-radius: 5px;
+                border: 1px solid {GlobalStyle._brand_light.name()};
+            }}
+            
+            QLineEdit:focus, QTextEdit:focus {{
+                border: 2px solid {GlobalStyle._brand.name()};
+            }}
+            
+            QScrollArea {{
+                background: none;
+            }}
+            
+            QTabWidget::pane {{
+                background: {GlobalStyle._gray_lightest.name()};
+                border-bottom-left-radius: 5px;
+                border-bottom-right-radius: 5px;
+                border: 1px solid {GlobalStyle._gray.name()};
+            }}
+            
+            QTabBar::tab {{
+                background: {GlobalStyle._gray_lighter.name()};
+                padding: 10px;
+                border: 1px solid {GlobalStyle._gray_light.name()};
+                border-bottom: none;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            }}
+            
+            QTabBar::tab:hover {{
+                background: {GlobalStyle._gray.name()};
+            }}
+            
+            QTabBar::tab:selected {{
+                background: {GlobalStyle._white.name()};
+                border-color: {GlobalStyle._brand.name()};
+            }}
+            
+            QPushButton {{
+                background: {GlobalStyle._cta.name()};
+                color: {GlobalStyle._white.name()};
+            }}
+            
+            QPushButton:disabled {{
+                background: {GlobalStyle._gray.name()};
+                color: {GlobalStyle._gray_light.name()};
+            }}
+            
+            QLabel {{
+                color: {GlobalStyle._gray_darkest.name()};
+                background: {GlobalStyle._gray_lighter.name()};
+                border: 3px solid {GlobalStyle._brand.name()};
+                border-top: none;
+                border-bottom: none;
+                border-right: none;
+            }}
+            
+            QMessageBox QLabel {{
+                background: none;
+                border: none;
+            }}
+        """
 
-        gradient = QtGui.QLinearGradient(0, 0, widget.width(), widget.height())
-        num_steps = 100
+        return stylesheet
 
-        for i in range(num_steps + 1):
-            position = i / num_steps
-            blend_factor = _sigmoid(position, 2, midpoint=1.7)
-            color = blend_colors(GeneralStyleMixin.main_color, GeneralStyleMixin.accent_color, blend_factor)
-            gradient.setColorAt(position, color)
-
-        widget.setAutoFillBackground(True)
-        palette = widget.palette()
-        palette.setBrush(QtGui.QPalette.Window, QtGui.QBrush(gradient))
-        palette.setColor(QtGui.QPalette.WindowText, GeneralStyleMixin.text_color)
-        palette.setColor(QtGui.QPalette.Button, GeneralStyleMixin.accent_color)
-        palette.setColor(QtGui.QPalette.ButtonText, GeneralStyleMixin.button_text_color)
-        widget.setPalette(palette)
-
-        font = widget.font()
-        font.setStyleHint(font.SansSerif)
-        font.setPointSize(16)
-        widget.setFont(font)
+    @staticmethod
+    def get_icon():
+        return QtGui.QIcon(str(GlobalStyle._icon_path.resolve()))

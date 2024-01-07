@@ -1,13 +1,16 @@
 from PyQt5 import QtCore, QtWidgets
 
 from src.ui.pages import MainPage, ProjectPage, GotoPayload, WindowPage
-from src.ui.styles import GeneralStyleMixin
+from src.ui.styles import GlobalStyle
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
-        GeneralStyleMixin.apply_style(self)
+
+        # Style
+        self.setWindowIcon(GlobalStyle.get_icon())
+        self.setStyleSheet(GlobalStyle.create_stylesheet())
 
         # Window size
         self.setMinimumSize(400, 400)

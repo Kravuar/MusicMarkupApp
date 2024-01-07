@@ -4,15 +4,14 @@ from pathlib import Path
 
 from src.app.form_validation import validate_required_field, show_error_message, validate_required_directory
 from src.app.project import Project
-from src.ui.styles import GeneralStyleMixin
+from src.config import PROJECT_FILE_SUFFIX
 
 
 class OpenExistingProjectDialog(QtWidgets.QDialog):
-    project_file_filter = "MM Project (*.mmp);;All Files (*)"
+    _PROJECT_FILE_FILTER = f"MM Project (*{PROJECT_FILE_SUFFIX});;All Files (*)"
 
     def __init__(self, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
-        GeneralStyleMixin.apply_style(self)
         self.setWindowTitle("Open Project")
 
         # State
@@ -59,7 +58,7 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
             self,
             "Select Project File",
             "",
-            OpenExistingProjectDialog.project_file_filter
+            OpenExistingProjectDialog._PROJECT_FILE_FILTER
         )
         if file:
             self._project_file_line_edit.setText(file)
@@ -91,7 +90,6 @@ class OpenExistingProjectDialog(QtWidgets.QDialog):
 class ProjectCreationDialog(QtWidgets.QDialog):
     def __init__(self, parent: QtWidgets.QWidget = None):
         super().__init__(parent)
-        GeneralStyleMixin.apply_style(self)
         self.setWindowTitle("Create Project")
 
         # State
@@ -112,17 +110,6 @@ class ProjectCreationDialog(QtWidgets.QDialog):
         layout.addWidget(QtWidgets.QLabel("Description:", self))
         self._description_text_edit = QtWidgets.QTextEdit(self)
         layout.addWidget(self._description_text_edit)
-
-        # Project file path
-        layout.addWidget(QtWidgets.QLabel("Project File Path:", self))
-        self._project_file_directory_line_edit = QtWidgets.QLineEdit(self)
-        browse_button = QtWidgets.QPushButton("Browse", self)
-        browse_button.clicked.connect(self._browse_project_file_directory)
-
-        project_directory_input_layout = QtWidgets.QHBoxLayout()
-        project_directory_input_layout.addWidget(self._project_file_directory_line_edit)
-        project_directory_input_layout.addWidget(browse_button)
-        layout.addLayout(project_directory_input_layout)
 
         # Dataset directory
         layout.addWidget(QtWidgets.QLabel("Dataset Directory:", self))
@@ -154,11 +141,6 @@ class ProjectCreationDialog(QtWidgets.QDialog):
             return self._project
         return None
 
-    def _browse_project_file_directory(self):
-        directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Project File Directory")
-        if directory:
-            self._project_file_directory_line_edit.setText(directory)
-
     def _browse_dataset_directory(self):
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Dataset Directory")
         if directory:
@@ -174,10 +156,8 @@ class ProjectCreationDialog(QtWidgets.QDialog):
             self._project = Project(
                 self._name_line_edit.text(),
                 self._description_text_edit.toPlainText(),
-                Path(self._project_file_directory_line_edit.text()),
                 Path(self._dataset_directory_line_edit.text()),
             )
-            self._project.save()
             self.accept()
         except Exception as e:
             QtWidgets.QMessageBox.critical(
@@ -190,7 +170,6 @@ class ProjectCreationDialog(QtWidgets.QDialog):
     def _validate(self):
         errors = dict(filter(None, [
             validate_required_field(self._name_line_edit.text(), "Name"),
-            validate_required_directory(self._dataset_directory_line_edit.text(), "Dataset directory"),
-            validate_required_directory(self._project_file_directory_line_edit.text(), "Project file directory")
+            validate_required_directory(self._dataset_directory_line_edit.text(), "Dataset directory")
         ]))
         return errors
