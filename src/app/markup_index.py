@@ -128,12 +128,13 @@ class InfiniteMarkupIterator(MarkupIterator):
         self._list_view = list(entries.items())
 
     def _get_unordered_entry(self):
-        return random.choice(self._list_view)
+        choice = random.choice(self._list_view)
+        return {'checksum': choice[0], 'relative_path': choice[1]}
 
     def _get_ordered_entry(self):
         key = next(iter(self._entries))
         self._entries.move_to_end(key)
-        return key, self._entries[key]
+        return {'checksum': key, 'relative_path': self._entries[key]}
 
     def _has_next(self):
         return bool(self._entries)
@@ -150,19 +151,27 @@ class NonLabeledMarkupIterator(MarkupIterator):
 
     def _get_unordered_entry(self):
         k, v = random.choice(list(self._non_labeled.items()))  # Fkit, lists go brrr (100x slower than ordered)
-        return k, v.relative_path, self._mark_labeled_callback(k)
+        return {
+            'checksum': k,
+            'relative_path': v,
+            'mark_labeled_callback': self._mark_labeled_callback(k)
+        }
 
     def _get_ordered_entry(self):
         # Retrieves first item in dict, moves it to the end (so that dict is shifted)
         key = next(iter(self._non_labeled))
         self._non_labeled.move_to_end(key)
-        return key, self._non_labeled[key].relative_path, self._mark_labeled_callback(key)
+        return {
+            'checksum': key,
+            'relative_path': self._non_labeled[key].relative_path,
+            'mark_labeled_callback': self._mark_labeled_callback(key)
+        }
 
     def _mark_labeled_callback(self, key: str):
-        def mark_labeled():
+        def mark_labeled(labeled: bool):
             entry = self._non_labeled.pop(key, None)
             if entry:
-                entry.is_labeled = True
+                entry.is_labeled = labeled
 
         return mark_labeled
 

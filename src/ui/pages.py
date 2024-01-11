@@ -1,18 +1,17 @@
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from bidict import bidict
-
-from src.app.form_validation import show_error_message, validate_required_field, validate_required_directory
-from src.app.markup_index import NonLabeledMarkupIterator, MarkupIterator, MarkupIteratorFilterMode, \
-    MarkupIteratorOrderMode
-from src.ui.dialogs import ProjectCreationDialog, OpenExistingProjectDialog
 from typing import Any
 
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QMessageBox
+from bidict import bidict
 
+from src.app.form_validation import show_error_message, validate_required_field
+from src.app.markup_index import NonLabeledMarkupIterator, MarkupIterator, MarkupIteratorFilterMode, \
+    MarkupIteratorOrderMode
 from src.app.project import Project
 from src.config import PROJECT_FILE_SUFFIX
+from src.ui.dialogs import ProjectCreationDialog, OpenExistingProjectDialog
 
 
 @dataclass
@@ -175,9 +174,9 @@ class ProjectPage(WindowPage):
         markup_tab_save_button.clicked.connect(self._save_markup)
         buttons_layout.addWidget(markup_tab_save_button)
 
-        skip_button = QtWidgets.QPushButton("Skip", markup_tab)
-        skip_button.clicked.connect(self._move_next)
-        buttons_layout.addWidget(skip_button)
+        next_button = QtWidgets.QPushButton("Next", markup_tab)
+        next_button.clicked.connect(self._move_next)
+        buttons_layout.addWidget(next_button)
 
         markup_layout.addLayout(buttons_layout)
 
@@ -265,26 +264,27 @@ class ProjectPage(WindowPage):
         self.setWindowTitle(f"Project | {self._project.name}")  # TODO: huh?
 
         # TODO: Persist iterator
-        self._iterator = self._project.get_dataset_iterator(ProjectPage._DEFAULT_FILTER_MODE, ProjectPage._DEFAULT_ORDER_MODE)
+        self._iterator = self._project.get_dataset_iterator(ProjectPage._DEFAULT_FILTER_MODE,
+                                                            ProjectPage._DEFAULT_ORDER_MODE)
 
         self._move_next()
 
     def _move_next(self):
         if self._iterator.remaining == 0:
-            decision = QtWidgets.QMessageBox.question(
+            decision = QMessageBox.question(
                 self,
                 "Dataset is exhausted",
                 "Dataset is fully labeled, do you want to switch no infinite mode?",
-                QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No
+                QMessageBox.Yes, QMessageBox.No
             )
-            if decision == QtWidgets.QMessageBox.Yes:
+            if decision == QMessageBox.Yes:
                 button_id = self._iteration_filter_mode_button_mapping.inverse[MarkupIteratorFilterMode.ALL]
                 self._iteration_filter_mode_toggle_group.button(button_id).toggle()
         self._current_iteration_data = next(self._iterator)
 
         # TODO: better info
-        checksum, relative_path, *other = self._current_iteration_data
-        self._data_info.setText(f"Checksum: {checksum}, Relative Path: {relative_path}")
+        self._data_info.setText(
+            f"Checksum: {self._current_iteration_data['checksum']}, Relative Path: {self._current_iteration_data['relative_path']}")
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [
@@ -296,11 +296,11 @@ class ProjectPage(WindowPage):
             return
 
         if in_existing and not self._project_path:
-            QtWidgets.QMessageBox.critical(
+            QMessageBox.critical(
                 self,
                 "Project Saving Error",
                 "This project doesn't have an associated file. Please select a file to save it.",
-                QtWidgets.QMessageBox.Ok
+                QMessageBox.Ok
             )
 
         if in_existing and self._project_path:
@@ -317,17 +317,35 @@ class ProjectPage(WindowPage):
         try:
             self._project.save(path)
         except Exception as e:
-            QtWidgets.QMessageBox.critical(
+            QMessageBox.critical(
                 self,
                 "Project Saving Error",
                 str(e),
-                QtWidgets.QMessageBox.Ok
+                QMessageBox.Ok
             )
 
     def _export_markup(self):
         # TODO: Retrieve dir path from dialog
         # self._project.export_markup(path)
         pass
+
+    def _update_markup(self, rowId: int):
+        validation_errors = dict(filter(None, [
+            validate_required_field(self._description_input_text_edit.toPlainText(), "Description"),
+        ]))
+        if validation_errors:
+            show_error_message(validation_errors, self)
+            return
+
+        start = 0  # TODO: yeah, todo this
+        end = 0  #
+
+        self._project.update_entry(
+            rowId,
+            start,
+            end,
+            self._description_input_text_edit.toPlainText()
+        )
 
     def _save_markup(self):
         validation_errors = dict(filter(None, [
@@ -337,16 +355,28 @@ class ProjectPage(WindowPage):
             show_error_message(validation_errors, self)
             return
 
-        checksum, relative_path, *other = self._current_iteration_data
         start = 0  # TODO: yeah, todo this
         end = 0  #
-        self._project.add_entry(checksum, relative_path, start, end, self._description_input_text_edit.text())
-        
+        self._project.add_entry(
+            self._current_iteration_data['checksum'],
+            self._current_iteration_data['relative_path'],
+            start,
+            end,
+            self._description_input_text_edit.toPlainText()
+        )
+
         if isinstance(self._iterator, NonLabeledMarkupIterator):
-            mark_labeled_callback = other[0]
-            mark_labeled_callback()
-            
-        self._move_next()
+            mark_labeled_callback = self._current_iteration_data['mark_labeled_callback']
+            mark_labeled_callback(True)
+
+    def _delete_markup(self, rowId: int):
+        self._project.delete_entry(rowId)
+
+        if isinstance(self._iterator, NonLabeledMarkupIterator):
+            # TODO: if this was the last label entry for this file
+            # mark_labeled_callback = self._current_iteration_data['mark_labeled_callback']
+            # mark_labeled_callback(False)
+            pass
 
     def _order_mode_changed(self, order_mode_id):
         self._iterator.mode = self._iteration_order_mode_button_mapping[order_mode_id]
@@ -359,13 +389,13 @@ class ProjectPage(WindowPage):
 
     def _close_project(self):
         # TODO: Ask only if changes were made
-        message_box = QtWidgets.QMessageBox(self)
+        message_box = QMessageBox(self)
         message_box.setWindowTitle("Closing Project")
         message_box.setText("All progress will be lost. Do you want to save this project before closing it?")
-        message_box.addButton(QtWidgets.QMessageBox.Save)
+        message_box.addButton(QMessageBox.Save)
         message_box.addButton("Save As", QMessageBox.YesRole)
-        message_box.addButton(QtWidgets.QMessageBox.No)
-        message_box.addButton(QtWidgets.QMessageBox.Cancel)
+        message_box.addButton(QMessageBox.No)
+        message_box.addButton(QMessageBox.Cancel)
 
         answer = message_box.exec_()
         if answer == QMessageBox.Save:
@@ -378,4 +408,4 @@ class ProjectPage(WindowPage):
             return
         self._project = None
         self._project_path = None
-        self.goto("main")
+        self._goto("main")

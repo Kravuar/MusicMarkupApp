@@ -1,7 +1,7 @@
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self
+from typing import Self, List
 
-import pandas as pd
 import pickle
 
 from src.app.markup import MarkupSettings
@@ -9,25 +9,54 @@ from src.app.markup_index import MarkupIndex, MarkupIteratorFilterMode, MarkupIt
 from src.config import AUDIO_FILES_PATTERN, PROJECT_FILE_SUFFIX, MARKUP_FILE_SUFFIX
 
 
+@dataclass
+class MarkupEntry:
+    checksum: str
+    relative_path: Path
+    start: float
+    end: float
+    description: str
+    is_corrupted: bool = field(init=False, default=False)
+
+
 class Project:
     def __init__(self, name: str, description: str, dataset_dir: Path):
         self.name = name
         self.description = description
         self._markup_settings = MarkupSettings()
-        self._markup_dataframe = pd.DataFrame(
-            columns=['relative_path', 'start', 'end', 'description', 'is_corrupted'],
-            index=pd.Index([], name='checksum')
-        )
+        self._markup_entries: List[MarkupEntry] = []
         self._markup_index = MarkupIndex(dataset_dir, AUDIO_FILES_PATTERN)  # TODO: parallelize checksum?
 
     def get_dataset_iterator(self, filter_mode: MarkupIteratorFilterMode, order_mode: MarkupIteratorOrderMode):
         return self._markup_index.get_iterator(filter_mode, order_mode)
 
+    def update_entry(self, rowId: int, start: float, end: float, description: str):
+        if 0 <= rowId < len(self._markup_entries):
+            entry = self._markup_entries[rowId]
+            entry.start = start
+            entry.end = end
+            entry.description = description
+        else:
+            raise IndexError(f"Row with ID {rowId} does not exist.")
+
     def add_entry(self, checksum: str, relative_path: Path, start: float, end: float, description: str):
-        self._markup_dataframe[checksum] = [relative_path, start, end, description]
+        new_entry = MarkupEntry(
+            checksum=checksum,
+            relative_path=relative_path,
+            start=start,
+            end=end,
+            description=description
+        )
+        self._markup_entries.append(new_entry)
+
+    def delete_entry(self, rowId: int):
+        if 0 <= rowId < len(self._markup_entries):
+            del self._markup_entries[rowId]
+        else:
+            raise IndexError(f"Row with ID {rowId} does not exist.")
 
     def find_entries(self, checksum: str):
-        return self._markup_dataframe[self._markup_dataframe['checksum'] == checksum]
+        return [entry for entry in self._markup_entries if entry.checksum == checksum]
 
     @classmethod
     def load(cls, path: Path) -> Self:
@@ -45,15 +74,18 @@ class Project:
 
     def _update_state(self):
         self._markup_index.update_state()
-        old_state = set(self._markup_dataframe.index)
+        old_state = set([entry.checksum for entry in self._markup_entries])
         new_state = set(self._markup_index.keys())
 
         removed_entries = old_state - new_state
-        self._markup_dataframe.loc[self._markup_dataframe.index.isin(removed_entries), 'is_corrupted'] = True
+        for entry in self._markup_entries:
+            if entry.checksum in removed_entries:
+                entry.is_corrupted = True
 
         updated_entries = old_state & new_state
         updated_paths = {checksum: self._markup_index[checksum].relative_path for checksum in updated_entries}
-        self._markup_dataframe.update(pd.DataFrame.from_dict(updated_paths, orient='index', columns=['relative_path']))
+        for entry in self._markup_entries:
+            entry.relative_path = updated_paths.get(entry.checksum, entry.relative_path)
 
     def save(self, path: Path):
         if path.is_dir():
@@ -73,8 +105,14 @@ class Project:
             raise ValueError("Path should be an existing directory.")
         path = path / (self.name + MARKUP_FILE_SUFFIX)
         try:
+            dataframe = [{'relative_path': str(entry.relative_path),
+                          'start': entry.start,
+                          'end': entry.end,
+                          'description': entry.description,
+                          'is_corrupted': entry.is_corrupted}
+                         for entry in self._markup_entries]
             with open(path, 'wb') as file:
-                pickle.dump(self._markup_dataframe, file)
+                pickle.dump(dataframe, file)
         except Exception as e:
             raise RuntimeError(f"Failed to export markup to {path}: {e}")
 
