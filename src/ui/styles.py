@@ -1,15 +1,7 @@
-import math
 from pathlib import Path
 
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtGui import QColor
-
-
-def blend_colors(color1: QColor, color2: QColor, factor: float):
-    r = int(color1.red() + factor * (color2.red() - color1.red()))
-    g = int(color1.green() + factor * (color2.green() - color1.green()))
-    b = int(color1.blue() + factor * (color2.blue() - color1.blue()))
-    return QtGui.QColor(r, g, b)
+from PySide6 import QtGui
+from PySide6.QtGui import QColor
 
 
 class GlobalStyle:

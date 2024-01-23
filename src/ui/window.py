@@ -1,10 +1,13 @@
-from PyQt5 import QtCore, QtWidgets
+from PySide6.QtCore import Slot
+from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
-from src.ui.pages import MainPage, ProjectPage, GotoPayload, WindowPage
+from src.ui.pages.MainPage import MainPage
+from src.ui.pages.ProjectPage import ProjectPage
+from src.ui.pages.WindowPage import GotoPayload, WindowPage
 from src.ui.styles import GlobalStyle
 
 
-class MainWindow(QtWidgets.QMainWindow):
+class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -17,7 +20,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1000, 700)
 
         # Page container
-        self._stacked_widget = QtWidgets.QStackedWidget(self)
+        self._stacked_widget = QStackedWidget(self)
         self.setCentralWidget(self._stacked_widget)
         self._pages = {}
 
@@ -32,7 +35,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stacked_widget.addWidget(page)
         page.goto_signal.connect(self._goto)
 
-    @QtCore.pyqtSlot(GotoPayload)
+    @Slot(GotoPayload)
     def _goto(self, payload: GotoPayload):
         if payload.name in self._pages:
             page = self._pages[payload.name]
