@@ -11,6 +11,7 @@ from src.app.markup_iterator import MarkupIterator
 from src.app.markup_settings import IterationSettings, SettingsEnum
 from src.app.project import Project
 from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
+from src.ui.components.MusicPlayer import AudioPlayerWidget
 from src.ui.pages.WindowPage import WindowPage
 
 
@@ -32,8 +33,11 @@ class ProjectPage(WindowPage):
         layout = QVBoxLayout(self)
 
         # Tabs
-        tabs = QTabWidget(self)
-        layout.addWidget(tabs)
+        self.tabs = QTabWidget(self)
+        exit_button = QPushButton('Close', self)
+        exit_button.clicked.connect(self._close_project)
+        self.tabs.setCornerWidget(exit_button)
+        layout.addWidget(self.tabs)
 
         # Markup Tab
         markup_tab_scroll = QScrollArea(self)
@@ -41,7 +45,7 @@ class ProjectPage(WindowPage):
         markup_tab = QWidget(markup_tab_scroll)
         markup_tab_scroll.setWidget(markup_tab)
 
-        tabs.addTab(markup_tab_scroll, "Markup")
+        self.tabs.addTab(markup_tab_scroll, "Markup")
 
         # Markup Layout
         markup_layout = QVBoxLayout(markup_tab)
@@ -53,6 +57,9 @@ class ProjectPage(WindowPage):
         self._data_info = QLabel(markup_tab)
         markup_layout.addWidget(entry_info_label)
         markup_layout.addWidget(self._data_info)
+
+        self.player = AudioPlayerWidget(self)
+        markup_layout.addWidget(self.player)
 
         # Description input
         description_label = QLabel("Description:", markup_tab)
@@ -82,7 +89,7 @@ class ProjectPage(WindowPage):
         markup_settings_tab = QWidget(markup_settings_tab_scroll)
         markup_settings_tab_scroll.setWidget(markup_settings_tab)
 
-        tabs.addTab(markup_settings_tab_scroll, "Markup Settings")
+        self.tabs.addTab(markup_settings_tab_scroll, "Markup Settings")
 
         # Markup Settings Layout
         markup_settings_layout = QFormLayout(self)
@@ -106,7 +113,7 @@ class ProjectPage(WindowPage):
         project_details_tab = QWidget(details_tab_scroll)
         details_tab_scroll.setWidget(project_details_tab)
 
-        tabs.addTab(details_tab_scroll, "Project Details")
+        self.tabs.addTab(details_tab_scroll, "Project Details")
 
         # Project Details Layout
         project_details_layout = QVBoxLayout(project_details_tab)
@@ -126,10 +133,6 @@ class ProjectPage(WindowPage):
 
         # Detail tab buttons
         detail_tab_button_layout = QHBoxLayout(project_details_tab)
-
-        exit_button = QPushButton("Close Project", self)
-        exit_button.clicked.connect(self._close_project)
-        detail_tab_button_layout.addWidget(exit_button)
 
         detail_tab_save_button = QPushButton("Save", project_details_tab)
         detail_tab_save_button.clicked.connect(lambda: self._save_project(in_existing=True))
@@ -188,9 +191,8 @@ class ProjectPage(WindowPage):
         # TODO: better info
         checksum = self._iterator.last_accessed_entry.checksum
         relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
-        self._data_info.setText(
-            f"Checksum: {checksum}, Relative Path: {relative_path}"
-        )
+        self.player.set_file(self._project.markup_data.full_path(relative_path))
+        self._data_info.setText(f"Checksum: {checksum}, Relative Path: {relative_path}")
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [

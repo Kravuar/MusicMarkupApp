@@ -76,6 +76,9 @@ class MarkupData:
     def filter(self, predicate: Callable[[MarkupView], bool]) -> List[MarkupView]:
         return [view for key, entry in self._data.items() if predicate(view := MarkupView(key, entry))]
 
+    def full_path(self, relative_path: Path):
+        return self._directory / relative_path
+
     def to_df(self) -> DataFrame:
         unpacked_rows = [{
             'checksum': checksum,

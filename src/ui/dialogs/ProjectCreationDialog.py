@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtWidgets import QWidget, QDialog, QMessageBox, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, \
     QFileDialog, QTextEdit
@@ -9,7 +10,7 @@ from src.ui.pages.ProjectPage import ProjectPage
 
 
 class ProjectCreationDialog(QDialog):
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, parent: Optional[QWidget]):
         super().__init__(parent)
         self.setWindowTitle("Create Project")
 

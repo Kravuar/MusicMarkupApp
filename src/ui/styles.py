@@ -5,7 +5,7 @@ from PySide6.QtGui import QColor
 
 
 class GlobalStyle:
-    _icon_path = Path("assets/icon.png")
+    _icon_path = Path("resources/icon.png")
     _white = QColor('#ffffff')
     _gray_lightest = QColor('#f8f7f8')
     _gray_lighter = QColor('#e5e4e4')

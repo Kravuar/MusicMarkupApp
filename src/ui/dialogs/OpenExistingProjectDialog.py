@@ -13,7 +13,7 @@ from src.ui.pages.ProjectPage import ProjectPage
 class OpenExistingProjectDialog(QDialog):
     _PROJECT_FILE_FILTER = f"MM Project (*{PROJECT_FILE_SUFFIX});;All Files (*)"
 
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, parent: Optional[QWidget]):
         super().__init__(parent)
         self.setWindowTitle("Open Project")
 
