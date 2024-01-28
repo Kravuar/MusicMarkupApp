@@ -11,8 +11,17 @@ from src.app.markup_iterator import MarkupIterator
 from src.app.markup_settings import IterationSettings, SettingsEnum
 from src.app.project import Project
 from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
+from src.ui.components.MarkupContainer import MarkupContainerWidget
 from src.ui.components.MusicPlayer import AudioPlayerWidget
+from src.ui.components.RangeSlider import LabeledRangeSlider
 from src.ui.pages.WindowPage import WindowPage
+
+
+def _time_label_mapper(time_in_ms: int):
+    seconds = int(time_in_ms / 1000)
+    minutes = int(seconds / 60)
+    seconds -= minutes * 60
+    return f'{minutes:02d}:{seconds:02d}'
 
 
 class ProjectPage(WindowPage):
@@ -51,20 +60,27 @@ class ProjectPage(WindowPage):
         markup_layout = QVBoxLayout(markup_tab)
         markup_tab.setLayout(markup_layout)
 
-        # TODO: visualize audio file, play button and stuff
         # Entry info
         entry_info_label = QLabel("Entry Info:", markup_tab)
         self._data_info = QLabel(markup_tab)
         markup_layout.addWidget(entry_info_label)
         markup_layout.addWidget(self._data_info)
 
-        self.player = AudioPlayerWidget(self)
-        markup_layout.addWidget(self.player)
+        # Playback Player
+        self._player = AudioPlayerWidget(_time_label_mapper, self)
+        markup_layout.addWidget(self._player)
+
+        # Selection Range Slider
+        self._range_slider = LabeledRangeSlider(_time_label_mapper, parent=self)
+        markup_layout.addWidget(self._range_slider)
+
+        self._player.durationChanged.connect(self._media_changed)
 
         # Description input
         description_label = QLabel("Description:", markup_tab)
         self._description_input_text_edit = QTextEdit(markup_tab)
         self._description_input_text_edit.setMinimumHeight(300)
+
         markup_layout.addWidget(description_label)
         markup_layout.addWidget(self._description_input_text_edit)
 
@@ -81,7 +97,10 @@ class ProjectPage(WindowPage):
 
         markup_layout.addLayout(buttons_layout)
 
-        # TODO: Display existing descriptions from dataframe
+        # History
+        self._history = MarkupContainerWidget(_time_label_mapper, self)
+        self._history.delete_signal.connect(self._delete_markup)
+        markup_layout.addWidget(self._history)
 
         # Markup Settings Tab
         markup_settings_tab_scroll = QScrollArea(self)
@@ -96,15 +115,15 @@ class ProjectPage(WindowPage):
         markup_settings_tab.setLayout(markup_settings_layout)
 
         # Iteration Order Mode
-        self._order_mode_combobox = self._create_combobox(IterationSettings.OrderBy)
+        self._order_mode_combobox = self._create_settings_combobox(IterationSettings.OrderBy)
         markup_settings_layout.addRow("Iteration Order Mode:", self._order_mode_combobox)
 
         # Iteration Filter Mode
-        self._filter_mode_combobox = self._create_combobox(IterationSettings.Filters)
+        self._filter_mode_combobox = self._create_settings_combobox(IterationSettings.Filters)
         markup_settings_layout.addRow("Iteration Filter Mode:", self._filter_mode_combobox)
 
         # Iteration Index Mode
-        self._index_mode_combobox = self._create_combobox(IterationSettings.Index)
+        self._index_mode_combobox = self._create_settings_combobox(IterationSettings.Index)
         markup_settings_layout.addRow("Iteration Index Mode:", self._index_mode_combobox)
 
         # Project Details Tab
@@ -149,20 +168,34 @@ class ProjectPage(WindowPage):
         project_details_layout.addLayout(detail_tab_button_layout)
 
     def on_enter(self, data: EntryData):
+        # State
         self._project = data.project
         self._project_path = data.path
-
-        self._project_name_line_edit.setText(self._project.name)
-        self._project_description_line_edit.setPlainText(self._project.description)
-        self.setWindowTitle(f"Project | {self._project.name}")  # TODO: huh?
-
         self._iterator = self._project.get_dataset_iterator()
 
-        self._move_next()
+        # Settings Synchronization
+        current_index_mode = self._project.markup_settings.iteration_settings.index_callback
+        self._index_mode_combobox.setCurrentIndex(
+            next(i for i, v in enumerate(IterationSettings.Index.getOptions()) if v.value == current_index_mode))
 
-    def _create_combobox(self, settings_enum: Type[SettingsEnum]):
+        current_order_mode = self._project.markup_settings.iteration_settings.order_by
+        self._order_mode_combobox.setCurrentIndex(
+            next(i for i, v in enumerate(IterationSettings.OrderBy.getOptions()) if v.value == current_order_mode))
+
+        current_filter_mode = self._project.markup_settings.iteration_settings.filter_predicate
+        self._filter_mode_combobox.setCurrentIndex(
+            next(i for i, v in enumerate(IterationSettings.Filters.getOptions()) if v.value == current_filter_mode))
+
+        # UI Synchronization
+        self._prepare_entry()
+        self._project_name_line_edit.setText(self._project.name)
+        self._project_description_line_edit.setPlainText(self._project.description)
+        self._description_input_text_edit.clear()
+        self.setWindowTitle(f"Project | {self._project.name}")  # TODO: huh?
+
+    def _create_settings_combobox(self, settings_enum: Type[SettingsEnum]):
         combobox = QComboBox(self)
-        for entry in settings_enum():
+        for entry in settings_enum.getOptions():
             combobox.addItem(entry.display_name, entry.value)
         combobox.currentIndexChanged.connect(self._settings_changed)
         return combobox
@@ -177,7 +210,18 @@ class ProjectPage(WindowPage):
         self._project.markup_settings.iteration_settings.index_callback = index_mode
 
     def _move_next(self):
-        if not self._iterator.next():
+        self._iterator.next()
+        self._prepare_entry()
+
+    def _media_changed(self, duration: int):
+        self._range_slider.set_range_limit(0, duration)
+        self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
+        self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+        self._history.set_markups(self._iterator.last_accessed_entry.entry.values, duration)
+
+    def _prepare_entry(self):
+        # TODO: better info
+        if self._iterator.last_accessed_entry is None:
             QMessageBox.question(
                 self,
                 "Dataset is exhausted",
@@ -185,14 +229,12 @@ class ProjectPage(WindowPage):
                 QMessageBox.StandardButton.Ok
             )
         else:
-            self._display_entry()
+            checksum = self._iterator.last_accessed_entry.checksum
+            relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
 
-    def _display_entry(self):
-        # TODO: better info
-        checksum = self._iterator.last_accessed_entry.checksum
-        relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
-        self.player.set_file(self._project.markup_data.full_path(relative_path))
-        self._data_info.setText(f"Checksum: {checksum}, Relative Path: {relative_path}")
+            # Stuff That Does Not Require Opened Media
+            self._player.open(self._project.markup_data.full_path(relative_path))
+            self._data_info.setText(f"Checksum: {checksum}, Relative Path: {relative_path}")
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [
@@ -249,29 +291,6 @@ class ProjectPage(WindowPage):
                 QMessageBox.StandardButton.Ok
             )
 
-    def _update_markup(self, label_idx: int):
-        validation_errors = dict(filter(None, [
-            validate_required_field(self._description_input_text_edit.toPlainText(), "Description"),
-            # validate_non_equal_fields(self._fragment_start, self._fragment_end, "Fragment Start", "Fragment End")
-        ]))
-        if validation_errors:
-            show_error_message(validation_errors, self)
-            return
-
-        start = 0  # TODO: yeah, todo this
-        end = 0  #
-
-        self._project.markup_data.update(
-            self._iterator.last_accessed_entry.checksum,
-            label_idx,
-            MarkupValue(
-                start,
-                end,
-                self._description_input_text_edit.toPlainText()
-            )
-        )
-        self._display_entry()
-
     def _save_markup(self):
         validation_errors = dict(filter(None, [
             validate_required_field(self._description_input_text_edit.toPlainText(), "Description"),
@@ -281,25 +300,21 @@ class ProjectPage(WindowPage):
             show_error_message(validation_errors, self)
             return
 
-        start = 0  # TODO: yeah, todo this
-        end = 0  #
-
-        self._project.markup_data.add(
-            self._iterator.last_accessed_entry.checksum,
-            MarkupValue(
+        start, end = self._range_slider.get_range()
+        markup = MarkupValue(
                 start,
                 end,
                 self._description_input_text_edit.toPlainText()
             )
-        )
-        self._display_entry()
 
-    def _delete_markup(self, label_idx: int):
+        self._project.markup_data.add(self._iterator.last_accessed_entry.checksum, markup, 0)
+        self._history.add_markup(markup, self._player.get_duration(), 0)
+
+    def _delete_markup(self, markup_index: int):
         self._project.markup_data.delete(
             self._iterator.last_accessed_entry.checksum,
-            label_idx
+            markup_index
         )
-        self._display_entry()
 
     def _close_project(self):
         # TODO: Ask only if changes were made
@@ -318,6 +333,11 @@ class ProjectPage(WindowPage):
             self._save_project(in_existing=False)
         elif answer == QMessageBox.StandardButton.Cancel:
             return
+
         self._project = None
         self._project_path = None
+        self._iterator = None
+
+        self._player.discard()
+
         self._goto("main")

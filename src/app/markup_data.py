@@ -14,13 +14,13 @@ from src.config import AUDIO_FILES_PATTERN
 @dataclass
 class MarkupEntryInfo:
     relative_path: Path
-    is_corrupted: bool = field(init=False)
+    is_corrupted: bool = False
 
 
 @dataclass
 class MarkupValue:
-    start: float
-    end: float
+    start: int
+    end: int
     description: str
 
 
@@ -64,8 +64,8 @@ class MarkupData:
             return MarkupView(checksum, entry)
         return None
 
-    def add(self, checksum: str, markup: MarkupValue):
-        self._data[checksum].values.append(markup)
+    def add(self, checksum: str, markup: MarkupValue, index: int = 0):
+        self._data[checksum].values.insert(index, markup)
 
     def update(self, checksum: str, idx: int, markup: MarkupValue):
         self._data[checksum].values[idx] = markup

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 from PySide6.QtCore import (Qt, Signal, QBuffer, QIODevice)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -11,8 +11,9 @@ from src.app.audio_converter import convert_to_mp3
 
 class AudioPlayerWidget(QWidget):
     positionChanged = Signal(int)
+    durationChanged = Signal(int)
 
-    def __init__(self, parent: Optional[QWidget]):
+    def __init__(self, time_label_mapper: Callable[[int], str], parent: Optional[QWidget]):
         super().__init__(parent)
 
         # State
@@ -20,9 +21,10 @@ class AudioPlayerWidget(QWidget):
         self._audio_output = QAudioOutput(self)
         self._audio_output.setVolume(50)
         self._player.setAudioOutput(self._audio_output)
-        self._buffer = QBuffer()
+        self._buffer = None
         self._player.positionChanged.connect(self._position_changed)
         self._player.durationChanged.connect(self._duration_changed)
+        self._time_label_mapper = time_label_mapper
 
         # Layout
         layout = QHBoxLayout(self)
@@ -52,51 +54,57 @@ class AudioPlayerWidget(QWidget):
 
         layout.addLayout(controls_layout)
 
-        # Slider
-        time_layout = QHBoxLayout(self)
-        self.slider = QSlider(Qt.Horizontal)
-        self.slider.sliderMoved.connect(self.set_position)
-        self.slider.setRange(0, 0)
+        # Playback slider
+        playback_layout = QHBoxLayout(self)
 
-        self.currentTimeLabel = QLabel('00:00', self)
-        self.totalTimeLabel = QLabel('00:00', self)
+        self._currentTimeLabel = QLabel(self._time_label_mapper(0), self)
 
-        time_layout.addWidget(self.currentTimeLabel)
-        time_layout.addWidget(self.slider)
-        time_layout.addWidget(self.totalTimeLabel)
+        playback_layout.addWidget(self._currentTimeLabel)
 
-        layout.addLayout(time_layout)
+        self._slider = QSlider(Qt.Horizontal)
+        self._slider.sliderMoved.connect(self.set_position)
+        self._slider.setRange(0, 0)
+        playback_layout.addWidget(self._slider)
+
+        self._totalTimeLabel = QLabel(self)
+        playback_layout.addWidget(self._totalTimeLabel)
+
+        layout.addLayout(playback_layout)
 
         self.setLayout(layout)
 
-    def set_file(self, path: Path):
-        self._buffer.close()
+    def discard(self):
+        self._player.stop()
+        if self._buffer is not None:
+            self._buffer.data().clear()
+            self._buffer.close()
+            self._buffer = None
+
+    def open(self, path: Path):
+        self.discard()
+        self._buffer = QBuffer()
         self._buffer.setData(convert_to_mp3(path))
         self._buffer.open(QIODevice.ReadOnly)
-
         self._player.setSourceDevice(self._buffer, 'audio/mp3')
 
     def get_position(self):
         return self._player.position()
 
+    def get_duration(self):
+        return self._player.duration()
+
     def set_position(self, position: int):
         self._player.setPosition(position)
 
     def _position_changed(self, position: int):
-        self.slider.setValue(position)
-        self._update_time_label(self.currentTimeLabel, position)
+        self._slider.setValue(position)
+        self._currentTimeLabel.setText(self._time_label_mapper(position))
         self.positionChanged.emit(position)
 
     def _duration_changed(self, duration: int):
-        self.slider.setRange(0, duration)
-        self._update_time_label(self.totalTimeLabel, duration)
-
-    @staticmethod
-    def _update_time_label(label, time_in_ms):
-        seconds = int(time_in_ms / 1000)
-        minutes = int(seconds / 60)
-        seconds -= minutes * 60
-        label.setText(f'{minutes:02d}:{seconds:02d}')
+        self._slider.setRange(0, duration)
+        self._totalTimeLabel.setText(self._time_label_mapper(duration))
+        self.durationChanged.emit(duration)
 
     def _rewind(self):
         self.set_position(self._player.position() - 5000)

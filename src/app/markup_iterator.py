@@ -38,7 +38,9 @@ class MarkupIterator:
         return entry
 
     @property
-    def last_accessed_entry(self) -> MarkupView:
+    def last_accessed_entry(self) -> Optional[MarkupView]:
+        if self._settings.last_idx not in range(0, len(self._iteration_list)):
+            return None
         return self._iteration_list[self._settings.last_idx]
 
     @last_accessed_entry.setter

@@ -1,7 +1,7 @@
 import random
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, Any, Optional, Iterator
+from typing import Callable, Any, Optional, Iterator, Iterable
 
 from src.app.markup_data import MarkupView
 
@@ -15,7 +15,7 @@ class SettingsEnum:
 
     @classmethod
     @abstractmethod
-    def __iter__(cls) -> Iterator[SettingsEnumEntry]:
+    def getOptions(cls) -> Iterator[SettingsEnumEntry]:
         pass
 
 
@@ -31,11 +31,11 @@ class IterationSettings:
             return len(view.entry.values) == 0
 
         @classmethod
-        def __iter__(cls) -> Iterator[SettingsEnum.SettingsEnumEntry]:
-            return iter([
+        def getOptions(cls) -> Iterable[SettingsEnum.SettingsEnumEntry]:
+            return [
                 SettingsEnum.SettingsEnumEntry('all', 'All', cls.ALL),
                 SettingsEnum.SettingsEnumEntry('non_visited', 'None Visited', cls.NON_VISITED)
-            ])
+            ]
 
     class OrderBy(SettingsEnum):
         APPEARANCE = None
@@ -45,11 +45,11 @@ class IterationSettings:
             return len(view.entry.values)
 
         @classmethod
-        def __iter__(cls) -> Iterator[SettingsEnum.SettingsEnumEntry]:
-            return iter([
+        def getOptions(cls) -> Iterable[SettingsEnum.SettingsEnumEntry]:
+            return [
                 SettingsEnum.SettingsEnumEntry('appearance', 'Appearance', cls.APPEARANCE),
                 SettingsEnum.SettingsEnumEntry('label_count', 'Label Count', cls.LABEL_COUNT)
-            ])
+            ]
 
     class Index(SettingsEnum):
         @staticmethod
@@ -61,11 +61,11 @@ class IterationSettings:
             return random.randint(0, size - 1)
 
         @classmethod
-        def __iter__(cls) -> Iterator[SettingsEnum.SettingsEnumEntry]:
-            return iter([
+        def getOptions(cls) -> Iterable[SettingsEnum.SettingsEnumEntry]:
+            return [
                 SettingsEnum.SettingsEnumEntry('sequential', 'Sequential', cls.SEQUENTIAL),
                 SettingsEnum.SettingsEnumEntry('random', 'Random', cls.RANDOM)
-            ])
+            ]
 
     # takes view size, previous index, returns new index (default - sequential)
     index_callback: Callable[[int, int], int] = Index.SEQUENTIAL
@@ -80,6 +80,7 @@ class IterationSettings:
 @dataclass
 class MarkupSettings:
     iteration_settings: IterationSettings = field(default_factory=IterationSettings)
+    min_duration_in_ms: int = 5000
     # TODO: author regex, title regex
     # TODO: fragment size, overlap factor. Those can be changed at any time.
     # TODO: manual fragmentation with sliders and stuff.
