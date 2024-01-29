@@ -23,6 +23,8 @@ class MarkupHistoryWidget(QWidget):
         slider = LabeledRangeSlider(time_label_mapper, parent=self)
         slider.set_range_limit(0, entry_duration)
         slider.set_range(markup.start, markup.end)
+        slider.set_min_border_visible(False)
+        slider.set_max_border_visible(False)
         slider.set_readonly(True)
         horizontal_layout.addWidget(slider)
 
@@ -33,6 +35,7 @@ class MarkupHistoryWidget(QWidget):
 
         # Text area
         text_area = QTextEdit(markup.description, self)
+        text_area.setReadOnly(True)
         vertical_layout.addWidget(text_area)
 
 
@@ -62,6 +65,7 @@ class MarkupContainerWidget(QWidget):
 
         markup_widget = MarkupHistoryWidget(markup, entry_duration, self._time_label_mapper, self)
         markup_widget.delete_signal.connect(self._delete_markup)
+
         self._container_layout.insertWidget(index, markup_widget)
 
     def _delete_markup(self, markup: MarkupHistoryWidget):

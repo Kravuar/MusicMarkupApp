@@ -9,11 +9,6 @@ def validate_required_field(value, field_name):
         return field_name, f"Field is required."
 
 
-def validate_non_equal_fields(first, second, first_field_name, second_field_name):
-    if first == second:
-        return first_field_name, f"Field should not be equal to {second_field_name}."
-
-
 def validate_required_file(path: str, field_name):
     return _validate_required_path(path, field_name, False)
 

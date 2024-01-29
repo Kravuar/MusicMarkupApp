@@ -32,7 +32,7 @@ class MarkupEntry:
 
 @dataclass
 class MarkupView:
-    checksum: str
+    md5: str
     entry: MarkupEntry
 
 
@@ -46,32 +46,32 @@ class MarkupData:
         new_state: OrderedDict[str, MarkupEntry] = OrderedDict()
         for file_path in iterate_files(self._directory, AUDIO_FILES_PATTERN):
             with open(file_path, 'rb') as file:
-                file_checksum = hashlib.md5(file.read()).hexdigest()
+                file_md5 = hashlib.md5(file.read()).hexdigest()
                 relative_path = file_path.relative_to(self._directory)
 
-                old_entry = self._data.get(file_checksum)
+                old_entry = self._data.get(file_md5)
                 old_values = old_entry.values if bool(old_entry) else []
 
-                new_state[file_checksum] = MarkupEntry(
+                new_state[file_md5] = MarkupEntry(
                     MarkupEntryInfo(relative_path),
                     old_values
                 )
         self._data = new_state
 
-    def get(self, checksum: str) -> Optional[MarkupView]:
-        entry = self._data.get(checksum)
+    def get(self, md5: str) -> Optional[MarkupView]:
+        entry = self._data.get(md5)
         if entry is not None:
-            return MarkupView(checksum, entry)
+            return MarkupView(md5, entry)
         return None
 
-    def add(self, checksum: str, markup: MarkupValue, index: int = 0):
-        self._data[checksum].values.insert(index, markup)
+    def add(self, md5: str, markup: MarkupValue, index: int = 0):
+        self._data[md5].values.insert(index, markup)
 
-    def update(self, checksum: str, idx: int, markup: MarkupValue):
-        self._data[checksum].values[idx] = markup
+    def update(self, md5: str, idx: int, markup: MarkupValue):
+        self._data[md5].values[idx] = markup
 
-    def delete(self, checksum: str, idx: int):
-        self._data[checksum].values.pop(idx)
+    def delete(self, md5: str, idx: int):
+        self._data[md5].values.pop(idx)
 
     def filter(self, predicate: Callable[[MarkupView], bool]) -> List[MarkupView]:
         return [view for key, entry in self._data.items() if predicate(view := MarkupView(key, entry))]
@@ -81,13 +81,13 @@ class MarkupData:
 
     def to_df(self) -> DataFrame:
         unpacked_rows = [{
-            'checksum': checksum,
+            'md5': md5,
             'relative_path': markup_entry.entry_info.relative_path,
             'is_corrupted': markup_entry.entry_info.is_corrupted,
             'start': value.start,
             'end': value.end,
             'description': value.description
-        } for checksum, markup_entry in self._data.items()
+        } for md5, markup_entry in self._data.items()
             for value in markup_entry.values
         ]
 

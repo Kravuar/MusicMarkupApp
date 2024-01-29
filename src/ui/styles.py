@@ -98,6 +98,7 @@ class GlobalStyle:
                 border: 1px solid {GlobalStyle._gray.name()};
             }}
             
+            
             QTabBar::tab {{
                 background: {GlobalStyle._gray_lighter.name()};
                 padding: 10px;

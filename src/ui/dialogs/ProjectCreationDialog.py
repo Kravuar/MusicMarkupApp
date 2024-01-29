@@ -60,7 +60,7 @@ class ProjectCreationDialog(QDialog):
     def show_dialog(self):
         dialog_result = self.exec()
         if dialog_result == QDialog.DialogCode.Accepted:
-            return ProjectPage.EntryData(self._project)
+            return ProjectPage.OnEntryData(self._project)
         return None
 
     def _browse_dataset_directory(self):

@@ -51,10 +51,10 @@ class OpenExistingProjectDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-    def show_dialog(self) -> Optional[ProjectPage.EntryData]:
+    def show_dialog(self) -> Optional[ProjectPage.OnEntryData]:
         dialog_result = self.exec()
         if dialog_result == QDialog.DialogCode.Accepted:
-            return ProjectPage.EntryData(self._project, self._path)
+            return ProjectPage.OnEntryData(self._project, self._path)
         return None
 
     def _browse_project_file(self):

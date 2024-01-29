@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional, Type
 
 from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout, QPushButton, QTabWidget, QScrollArea, \
-    QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog
+    QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog, QGroupBox
 
 from src.app.form_validation import show_error_message, validate_required_field
 from src.app.markup_data import MarkupValue
@@ -12,6 +12,7 @@ from src.app.markup_settings import IterationSettings, SettingsEnum
 from src.app.project import Project
 from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
 from src.ui.components.MarkupContainer import MarkupContainerWidget
+from src.ui.components.MarkupEntriesList import MarkupEntriesWidget
 from src.ui.components.MusicPlayer import AudioPlayerWidget
 from src.ui.components.RangeSlider import LabeledRangeSlider
 from src.ui.pages.WindowPage import WindowPage
@@ -26,7 +27,7 @@ def _time_label_mapper(time_in_ms: int):
 
 class ProjectPage(WindowPage):
     @dataclass
-    class EntryData:
+    class OnEntryData:
         project: Project
         path: Optional[Path] = None
 
@@ -61,28 +62,41 @@ class ProjectPage(WindowPage):
         markup_tab.setLayout(markup_layout)
 
         # Entry info
-        entry_info_label = QLabel("Entry Info:", markup_tab)
-        self._data_info = QLabel(markup_tab)
-        markup_layout.addWidget(entry_info_label)
-        markup_layout.addWidget(self._data_info)
+        entry_info_group_box = QGroupBox('Current', self)
+        entry_info_layout = QVBoxLayout(entry_info_group_box)
+
+        self._entry_info = QLabel(markup_tab)
+        entry_info_layout.addWidget(self._entry_info)
 
         # Playback Player
         self._player = AudioPlayerWidget(_time_label_mapper, self)
-        markup_layout.addWidget(self._player)
+        entry_info_layout.addWidget(self._player)
 
-        # Selection Range Slider
+        entry_info_group_box.setLayout(entry_info_layout)
+        markup_layout.addWidget(entry_info_group_box)
+
+        # Range Selection Slider
+        range_selection_group_box = QGroupBox('Range Selection', self)
+        range_slider_layout = QVBoxLayout(range_selection_group_box)
+
         self._range_slider = LabeledRangeSlider(_time_label_mapper, parent=self)
-        markup_layout.addWidget(self._range_slider)
+        range_slider_layout.addWidget(self._range_slider)
+
+        range_selection_group_box.setLayout(range_slider_layout)
+        markup_layout.addWidget(range_selection_group_box)
 
         self._player.durationChanged.connect(self._media_changed)
 
         # Description input
-        description_label = QLabel("Description:", markup_tab)
-        self._description_input_text_edit = QTextEdit(markup_tab)
-        self._description_input_text_edit.setMinimumHeight(300)
+        description_group_box = QGroupBox('Description', self)
+        description_layout = QVBoxLayout(description_group_box)
 
-        markup_layout.addWidget(description_label)
-        markup_layout.addWidget(self._description_input_text_edit)
+        self._description_input_text_edit = QTextEdit(markup_tab)
+        self._description_input_text_edit.setMinimumHeight(250)
+        description_layout.addWidget(self._description_input_text_edit)
+
+        description_group_box.setLayout(description_layout)
+        markup_layout.addWidget(description_group_box)
 
         # Navigation Buttons
         buttons_layout = QHBoxLayout(markup_tab)
@@ -97,10 +111,26 @@ class ProjectPage(WindowPage):
 
         markup_layout.addLayout(buttons_layout)
 
+        # Entry List
+        markup_entries_group_box = QGroupBox('Visible Entries', self)
+        markup_entries_layout = QVBoxLayout(markup_entries_group_box)
+        self._markup_entries = MarkupEntriesWidget(self)
+        self._markup_entries.itemSelected.connect(self._entry_selected)
+        self._markup_entries.setMinimumHeight(200)
+        markup_entries_layout.addWidget(self._markup_entries)
+        markup_entries_group_box.setLayout(markup_entries_layout)
+        markup_layout.addWidget(markup_entries_group_box)
+
         # History
+        history_group_box = QGroupBox('Existing Labels', self)
+        history_layout = QVBoxLayout(history_group_box)
+
         self._history = MarkupContainerWidget(_time_label_mapper, self)
         self._history.delete_signal.connect(self._delete_markup)
-        markup_layout.addWidget(self._history)
+        history_layout.addWidget(self._history)
+
+        history_group_box.setLayout(history_layout)
+        markup_layout.addWidget(history_group_box)
 
         # Markup Settings Tab
         markup_settings_tab_scroll = QScrollArea(self)
@@ -167,7 +197,7 @@ class ProjectPage(WindowPage):
 
         project_details_layout.addLayout(detail_tab_button_layout)
 
-    def on_enter(self, data: EntryData):
+    def on_enter(self, data: OnEntryData):
         # State
         self._project = data.project
         self._project_path = data.path
@@ -191,6 +221,7 @@ class ProjectPage(WindowPage):
         self._project_name_line_edit.setText(self._project.name)
         self._project_description_line_edit.setPlainText(self._project.description)
         self._description_input_text_edit.clear()
+        self._markup_entries.set_entries(self._iterator.list())
         self.setWindowTitle(f"Project | {self._project.name}")  # TODO: huh?
 
     def _create_settings_combobox(self, settings_enum: Type[SettingsEnum]):
@@ -208,6 +239,10 @@ class ProjectPage(WindowPage):
         self._project.markup_settings.iteration_settings.order_by = order_mode
         self._project.markup_settings.iteration_settings.filter_predicate = filter_mode
         self._project.markup_settings.iteration_settings.index_callback = index_mode
+
+        self._iterator.refresh_view()
+
+        self._markup_entries.set_entries(self._iterator.list())
 
     def _move_next(self):
         self._iterator.next()
@@ -229,12 +264,10 @@ class ProjectPage(WindowPage):
                 QMessageBox.StandardButton.Ok
             )
         else:
-            checksum = self._iterator.last_accessed_entry.checksum
             relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
 
-            # Stuff That Does Not Require Opened Media
             self._player.open(self._project.markup_data.full_path(relative_path))
-            self._data_info.setText(f"Checksum: {checksum}, Relative Path: {relative_path}")
+            self._entry_info.setText(str(relative_path))
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [
@@ -293,8 +326,7 @@ class ProjectPage(WindowPage):
 
     def _save_markup(self):
         validation_errors = dict(filter(None, [
-            validate_required_field(self._description_input_text_edit.toPlainText(), "Description"),
-            # validate_non_equal_fields(self._fragment_start, self._fragment_end, "Fragment Start", "Fragment End")
+            validate_required_field(self._description_input_text_edit.toPlainText(), "Description")
         ]))
         if validation_errors:
             show_error_message(validation_errors, self)
@@ -307,12 +339,12 @@ class ProjectPage(WindowPage):
                 self._description_input_text_edit.toPlainText()
             )
 
-        self._project.markup_data.add(self._iterator.last_accessed_entry.checksum, markup, 0)
+        self._project.markup_data.add(self._iterator.last_accessed_entry.md5, markup, 0)
         self._history.add_markup(markup, self._player.get_duration(), 0)
 
     def _delete_markup(self, markup_index: int):
         self._project.markup_data.delete(
-            self._iterator.last_accessed_entry.checksum,
+            self._iterator.last_accessed_entry.md5,
             markup_index
         )
 
@@ -341,3 +373,7 @@ class ProjectPage(WindowPage):
         self._player.discard()
 
         self._goto("main")
+
+    def _entry_selected(self, md5: str):
+        self._iterator.last_accessed_entry = md5
+        self._prepare_entry()

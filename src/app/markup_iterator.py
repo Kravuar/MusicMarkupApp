@@ -44,7 +44,7 @@ class MarkupIterator:
         return self._iteration_list[self._settings.last_idx]
 
     @last_accessed_entry.setter
-    def last_accessed_entry(self, checksum: str):
-        idx = next((idx for idx, entry in enumerate(self._iteration_list) if entry.checksum == checksum), None)
+    def last_accessed_entry(self, md5: str):
+        idx = next((idx for idx, entry in enumerate(self._iteration_list) if entry.md5 == md5), None)
         if idx is not None:
             self._settings.last_idx = idx
