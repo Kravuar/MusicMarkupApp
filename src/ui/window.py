@@ -1,10 +1,13 @@
+from pathlib import Path
+
+from PySide6 import QtGui
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
+from qt_material import apply_stylesheet
 
 from src.ui.pages.MainPage import MainPage
 from src.ui.pages.ProjectPage import ProjectPage
 from src.ui.pages.WindowPage import GotoPayload, WindowPage
-from src.ui.styles import GlobalStyle
 
 
 class MainWindow(QMainWindow):
@@ -12,12 +15,9 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
 
         # Style
-        self.setWindowIcon(GlobalStyle.get_icon())
-        self.setStyleSheet(GlobalStyle.create_stylesheet())
-
-        # Window size
-        self.setMinimumSize(400, 400)
-        self.resize(1000, 700)
+        self.setWindowIcon(QtGui.QIcon(str(Path("resources/icon.png").resolve())))
+        self.setMinimumWidth(700)
+        apply_stylesheet(self, theme='dark_purple.xml')
 
         # Page container
         self._stacked_widget = QStackedWidget(self)

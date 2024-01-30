@@ -1,29 +1,39 @@
-import io
 import subprocess
-import tempfile
+from abc import abstractmethod, ABC
 from pathlib import Path
 
-from pydub import AudioSegment
+from PySide6.QtCore import QIODevice, QTemporaryFile, QFile
 
 from src.config import MIDI_SF_PATH
 
 
-def convert_to_mp3(file_path: Path) -> bytes:
-    audio_format = file_path.suffix.replace('.', '').lower()
+class Converter(ABC):
+    @abstractmethod
+    def supports_source(self, source: QIODevice) -> bool:
+        pass
 
-    if audio_format in ['mid', 'midi']:
-        with tempfile.TemporaryDirectory() as td:
-            temp = Path(td) / 'temp'
-            subprocess.call(['fluidsynth', '-ni', MIDI_SF_PATH, file_path, '-F', temp, '-r', '44100'])
+    @abstractmethod
+    def convert(self, source: QIODevice) -> QIODevice:
+        pass
 
-            wav_audio = AudioSegment.from_wav(temp)
-            mp3_buffer = io.BytesIO()
-            wav_audio.export(mp3_buffer, format='mp3')
-            return mp3_buffer.getvalue()
-    else:
-        audio = AudioSegment.from_file(file_path, format=audio_format)
 
-        mp3 = io.BytesIO()
-        audio.export(mp3, format='mp3')
+class MidiToMP3Converter(Converter):
 
-        return mp3.getvalue()
+    def supports_source(self, source: QIODevice) -> bool:
+        is_file = isinstance(source, QFile)
+        is_midi = Path(source.fileName()).suffix in ['.mid', '.midi']
+        return is_file and is_midi
+
+    def convert(self, source: QIODevice) -> QIODevice:
+        if not isinstance(source, QFile):
+            raise ValueError("Provided QIODevice isn't supported by this converter.")
+
+        converted = QTemporaryFile()
+        if converted.open():
+            subprocess.call(['fluidsynth', '-ni', MIDI_SF_PATH, source.fileName(), '-F', converted.fileName(), '-r', '44100'])
+            return converted
+        else:
+            raise IOError('Could not create file for MIDI conversion.')
+
+
+CONVERTERS = [MidiToMP3Converter()]

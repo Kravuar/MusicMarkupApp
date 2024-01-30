@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Type
 
+from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout, QPushButton, QTabWidget, QScrollArea, \
     QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog, QGroupBox
 
+from src.app.audio_converter import CONVERTERS
 from src.app.form_validation import show_error_message, validate_required_field
 from src.app.markup_data import MarkupValue
 from src.app.markup_iterator import MarkupIterator
@@ -13,6 +15,7 @@ from src.app.project import Project
 from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
 from src.ui.components.MarkupContainer import MarkupContainerWidget
 from src.ui.components.MarkupEntriesList import MarkupEntriesWidget
+from src.ui.components.MediaIndicator import MediaIndicator
 from src.ui.components.MusicPlayer import AudioPlayerWidget
 from src.ui.components.RangeSlider import LabeledRangeSlider
 from src.ui.pages.WindowPage import WindowPage
@@ -33,6 +36,7 @@ class ProjectPage(WindowPage):
 
     def __init__(self):
         super().__init__()
+        self.setWindowTitle(f"Project")
 
         # State
         self._project: Optional[Project] = None
@@ -63,13 +67,16 @@ class ProjectPage(WindowPage):
 
         # Entry info
         entry_info_group_box = QGroupBox('Current', self)
-        entry_info_layout = QVBoxLayout(entry_info_group_box)
+        entry_info_layout = QHBoxLayout(entry_info_group_box)
 
+        self._media_indicator = MediaIndicator(self)
+        entry_info_layout.addWidget(self._media_indicator)
         self._entry_info = QLabel(markup_tab)
         entry_info_layout.addWidget(self._entry_info)
 
         # Playback Player
-        self._player = AudioPlayerWidget(_time_label_mapper, self)
+        self._player = AudioPlayerWidget(_time_label_mapper, CONVERTERS, self)
+        self._player.mediaStatusChanged.connect(self._ui_sync)
         entry_info_layout.addWidget(self._player)
 
         entry_info_group_box.setLayout(entry_info_layout)
@@ -79,13 +86,11 @@ class ProjectPage(WindowPage):
         range_selection_group_box = QGroupBox('Range Selection', self)
         range_slider_layout = QVBoxLayout(range_selection_group_box)
 
-        self._range_slider = LabeledRangeSlider(_time_label_mapper, parent=self)
+        self._range_slider = LabeledRangeSlider(_time_label_mapper, self)
         range_slider_layout.addWidget(self._range_slider)
 
         range_selection_group_box.setLayout(range_slider_layout)
         markup_layout.addWidget(range_selection_group_box)
-
-        self._player.durationChanged.connect(self._media_changed)
 
         # Description input
         description_group_box = QGroupBox('Description', self)
@@ -101,9 +106,9 @@ class ProjectPage(WindowPage):
         # Navigation Buttons
         buttons_layout = QHBoxLayout(markup_tab)
 
-        markup_tab_save_button = QPushButton("Save", markup_tab)
-        markup_tab_save_button.clicked.connect(self._save_markup)
-        buttons_layout.addWidget(markup_tab_save_button)
+        self._markup_tab_save_button = QPushButton("Save", markup_tab)
+        self._markup_tab_save_button.clicked.connect(self._save_markup)
+        buttons_layout.addWidget(self._markup_tab_save_button)
 
         next_button = QPushButton("Next", markup_tab)
         next_button.clicked.connect(self._move_next)
@@ -222,7 +227,6 @@ class ProjectPage(WindowPage):
         self._project_description_line_edit.setPlainText(self._project.description)
         self._description_input_text_edit.clear()
         self._markup_entries.set_entries(self._iterator.list())
-        self.setWindowTitle(f"Project | {self._project.name}")  # TODO: huh?
 
     def _create_settings_combobox(self, settings_enum: Type[SettingsEnum]):
         combobox = QComboBox(self)
@@ -248,14 +252,7 @@ class ProjectPage(WindowPage):
         self._iterator.next()
         self._prepare_entry()
 
-    def _media_changed(self, duration: int):
-        self._range_slider.set_range_limit(0, duration)
-        self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
-        self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
-        self._history.set_markups(self._iterator.last_accessed_entry.entry.values, duration)
-
     def _prepare_entry(self):
-        # TODO: better info
         if self._iterator.last_accessed_entry is None:
             QMessageBox.question(
                 self,
@@ -265,9 +262,7 @@ class ProjectPage(WindowPage):
             )
         else:
             relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
-
-            self._player.open(self._project.markup_data.full_path(relative_path))
-            self._entry_info.setText(str(relative_path))
+            self._player.open(self._project.markup_data.absolute_path(relative_path))
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [
@@ -377,3 +372,27 @@ class ProjectPage(WindowPage):
     def _entry_selected(self, md5: str):
         self._iterator.last_accessed_entry = md5
         self._prepare_entry()
+
+    def _ui_sync(self, status: QMediaPlayer.MediaStatus):
+        self._entry_info.setText(str(self._iterator.last_accessed_entry.entry.entry_info.relative_path))
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            self._markup_tab_save_button.setDisabled(False)
+            self._media_indicator.set_status(MediaIndicator.Status.GOOD)
+            self._range_slider.set_range_limit(0, self._player.get_duration())
+            self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+            self._history.set_markups(self._iterator.last_accessed_entry.entry.values, self._player.get_duration())
+        elif status == QMediaPlayer.MediaStatus.LoadingMedia:
+            self._markup_tab_save_button.setDisabled(True)
+            self._media_indicator.set_status(MediaIndicator.Status.LOADING)
+        elif status == QMediaPlayer.MediaStatus.InvalidMedia:
+            self._markup_tab_save_button.setDisabled(True)
+            self._project.markup_data.refresh_entry(self._iterator.last_accessed_entry.md5)
+            if self._iterator.last_accessed_entry.entry.entry_info.is_corrupted:
+                self._media_indicator.set_status(MediaIndicator.Status.CORRUPTED)
+            else:
+                self._media_indicator.set_status(MediaIndicator.Status.UNSUPPORTED)
+            self._range_slider.set_range_limit(0, self._player.get_duration())
+            self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+

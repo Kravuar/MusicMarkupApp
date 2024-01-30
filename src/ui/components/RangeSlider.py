@@ -189,7 +189,7 @@ class LabeledRangeSlider(QWidget):
         self._min_label = QLabel(self._label_map_func(0), self)
         slider_layout.addWidget(self._min_label)
 
-        self._slider = RangeSlider(parent=self)
+        self._slider = RangeSlider(False, self)
         slider_layout.addWidget(self._slider)
 
         self._max_label = QLabel(self._label_map_func(0), self)

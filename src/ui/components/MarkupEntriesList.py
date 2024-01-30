@@ -2,7 +2,7 @@ from typing import Iterable
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QStyle
 
 from src.app.markup_data import MarkupView
 
@@ -29,4 +29,4 @@ class MarkupEntriesWidget(QWidget):
             item = QListWidgetItem(label, self._list_widget)
             item.setData(Qt.ItemDataRole.UserRole, view.md5)
             if view.entry.entry_info.is_corrupted:
-                item.setForeground(Qt.GlobalColor.red)
+                item.setIcon(self.style().standardPixmap(QStyle.StandardPixmap.SP_MessageBoxCritical))

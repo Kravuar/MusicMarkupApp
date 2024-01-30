@@ -56,6 +56,10 @@ class MarkupData:
                     MarkupEntryInfo(relative_path),
                     old_values
                 )
+        for old_md5, old_entry in self._data.items():
+            if old_md5 not in new_state:
+                old_entry.entry_info.is_corrupted = True
+                new_state[old_md5] = old_entry
         self._data = new_state
 
     def get(self, md5: str) -> Optional[MarkupView]:
@@ -76,8 +80,14 @@ class MarkupData:
     def filter(self, predicate: Callable[[MarkupView], bool]) -> List[MarkupView]:
         return [view for key, entry in self._data.items() if predicate(view := MarkupView(key, entry))]
 
-    def full_path(self, relative_path: Path):
+    def absolute_path(self, relative_path: Path):
         return self._directory / relative_path
+
+    def refresh_entry(self, md5):
+        entry = self._data.get(md5, None)
+        if entry:
+            path = self._directory / entry.entry_info.relative_path
+            entry.entry_info.is_corrupted = not path.exists()
 
     def to_df(self) -> DataFrame:
         unpacked_rows = [{

@@ -1,30 +1,38 @@
+import threading
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
-from PySide6.QtCore import (Qt, Signal, QBuffer, QIODevice)
+from PySide6.QtCore import (Qt, Signal, QIODevice, QUrl)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QPushButton,
                                QSlider, QLabel, QStyle)
 
-from src.app.audio_converter import convert_to_mp3
+from src.app.audio_converter import Converter
 
 
 class AudioPlayerWidget(QWidget):
     positionChanged = Signal(int)
     durationChanged = Signal(int)
+    mediaStatusChanged = Signal(QMediaPlayer.MediaStatus)
 
-    def __init__(self, time_label_mapper: Callable[[int], str], parent: Optional[QWidget]):
+    def __init__(self, time_label_mapper: Callable[[int], str], converters: List[Converter], parent: Optional[QWidget]):
         super().__init__(parent)
 
         # State
+        self._converters = converters
         self._player = QMediaPlayer(self)
-        self._audio_output = QAudioOutput(self)
+        self._audio_output = QAudioOutput(self._player)
         self._audio_output.setVolume(50)
         self._player.setAudioOutput(self._audio_output)
-        self._buffer = None
+
+        self._time_label_mapper = time_label_mapper
+
         self._player.positionChanged.connect(self._position_changed)
         self._player.durationChanged.connect(self._duration_changed)
-        self._time_label_mapper = time_label_mapper
+        self._player.mediaStatusChanged.connect(self._update_accessibility)
+        self._player.mediaStatusChanged.connect(self._convert_if_invalid)
+        self._player.mediaStatusChanged.connect(self._hide_show_timestamps)
+        self._player.mediaStatusChanged.connect(lambda status: self.mediaStatusChanged.emit(status))
 
         # Layout
         layout = QHBoxLayout(self)
@@ -32,25 +40,23 @@ class AudioPlayerWidget(QWidget):
         # Controls
         controls_layout = QHBoxLayout(self)
 
-        self._play_button = QPushButton(self)
-        self._play_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-        self._play_button.clicked.connect(self._player.play)
-        controls_layout.addWidget(self._play_button)
+        self._play_pause_button = QPushButton(self)
+        self._play_pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self._play_pause_button.clicked.connect(lambda: self._toggle_play_pause(None))
+        self._play_pause_button.setDisabled(True)
+        controls_layout.addWidget(self._play_pause_button)
 
-        pause_button = QPushButton(self)
-        pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
-        pause_button.clicked.connect(self._player.pause)
-        controls_layout.addWidget(pause_button)
+        self._rewind_button = QPushButton(self)
+        self._rewind_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
+        self._rewind_button.clicked.connect(self._rewind)
+        self._rewind_button.setDisabled(True)
+        controls_layout.addWidget(self._rewind_button)
 
-        rewind_button = QPushButton(self)
-        rewind_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
-        rewind_button.clicked.connect(self._rewind)
-        controls_layout.addWidget(rewind_button)
-
-        forward_button = QPushButton(self)
-        forward_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
-        forward_button.clicked.connect(self._forward)
-        controls_layout.addWidget(forward_button)
+        self._forward_button = QPushButton(self)
+        self._forward_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
+        self._forward_button.clicked.connect(self._forward)
+        self._forward_button.setDisabled(True)
+        controls_layout.addWidget(self._forward_button)
 
         layout.addLayout(controls_layout)
 
@@ -75,17 +81,22 @@ class AudioPlayerWidget(QWidget):
 
     def discard(self):
         self._player.stop()
-        if self._buffer is not None:
-            self._buffer.data().clear()
-            self._buffer.close()
-            self._buffer = None
+        # Can't find an appropriate way to clean up, so I won't
 
     def open(self, path: Path):
         self.discard()
-        self._buffer = QBuffer()
-        self._buffer.setData(convert_to_mp3(path))
-        self._buffer.open(QIODevice.ReadOnly)
-        self._player.setSourceDevice(self._buffer, 'audio/mp3')
+        self._player.setSource(QUrl.fromLocalFile(path))
+        # This is the most retarded part of the QT, dumbass docs, braindead interfaces
+        # No idea why its crashes (but sometimes it does not), io is open, readable
+        # No matter what IODevice, in memory byte array or any file
+        # I feel like something wrong with the combination of setSource, setSourceDevice, even though setSource isn't used
+
+        # Desired implementation:
+        # self._player.setSourceDevice(QFile(path))
+
+    def open_from_device(self, source_device: QIODevice):
+        self.discard()
+        self._player.setSourceDevice(source_device)
 
     def get_position(self):
         return self._player.position()
@@ -111,3 +122,53 @@ class AudioPlayerWidget(QWidget):
 
     def _forward(self):
         self.set_position(self._player.position() + 5000)
+
+    def _toggle_play_pause(self, pause: Optional[bool]):
+        if pause is None:
+            pause = self._player.isPlaying()
+        if pause:
+            self._player.pause()
+            self._play_pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        else:
+            self._player.play()
+            self._play_pause_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+
+    def _update_accessibility(self, status: QMediaPlayer.MediaStatus):
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            self._play_pause_button.setDisabled(False)
+            self._rewind_button.setDisabled(False)
+            self._forward_button.setDisabled(False)
+            self._slider.setDisabled(False)
+        elif status in [QMediaPlayer.MediaStatus.LoadingMedia, QMediaPlayer.MediaStatus.InvalidMedia]:
+            self._play_pause_button.setDisabled(True)
+            self._rewind_button.setDisabled(True)
+            self._forward_button.setDisabled(True)
+            self._slider.setDisabled(True)
+        elif status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self._toggle_play_pause(True)
+            self._player.stop()
+
+    def _hide_show_timestamps(self, status: QMediaPlayer.MediaStatus):
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            self._totalTimeLabel.setVisible(True)
+            self._currentTimeLabel.setVisible(True)
+        elif status in [QMediaPlayer.MediaStatus.InvalidMedia, QMediaPlayer.MediaStatus.NoMedia]:
+            self._totalTimeLabel.setVisible(False)
+            self._currentTimeLabel.setVisible(False)
+
+    def _convert_if_invalid(self, status: QMediaPlayer.MediaStatus):
+        if status == QMediaPlayer.MediaStatus.InvalidMedia:
+            threading.Thread(target=self._try_convert_and_open).start()
+
+    def _try_convert_and_open(self):
+        invalid_source = self._player.sourceDevice()
+        if invalid_source is not None:
+            converter = next((conv for conv in self._converters if conv.supports_source(invalid_source)), None)
+
+            if converter is not None:
+                try:
+                    self._player.mediaStatusChanged.emit(QMediaPlayer.MediaStatus.LoadingMedia)
+                    converted = converter.convert(invalid_source)
+                    self.open_from_device(converted)
+                except Exception:
+                    pass

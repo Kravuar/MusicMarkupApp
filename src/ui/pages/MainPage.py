@@ -15,6 +15,7 @@ class MainPage(WindowPage):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Welcome")
+        self.resize(300, 300)
 
         # Layout
         layout = QVBoxLayout(self)
@@ -22,13 +23,13 @@ class MainPage(WindowPage):
         # Buttons
         buttons_layout = QVBoxLayout()
 
-        create_project_button = QPushButton("Create New Project", self)
-        create_project_button.clicked.connect(self._on_create)
-        buttons_layout.addWidget(create_project_button)
-
         open_project_button = QPushButton("Open Existing Project", self)
         open_project_button.clicked.connect(self._on_open_existing)
         buttons_layout.addWidget(open_project_button)
+
+        create_project_button = QPushButton("Create New Project", self)
+        create_project_button.clicked.connect(self._on_create)
+        buttons_layout.addWidget(create_project_button)
 
         exit_button = QPushButton("Exit", self)
         exit_button.clicked.connect(MainPage._on_exit)
