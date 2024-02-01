@@ -16,8 +16,9 @@ class MainWindow(QMainWindow):
 
         # Style
         self.setWindowIcon(QtGui.QIcon(str(Path("resources/icon.png").resolve())))
-        self.setMinimumWidth(700)
+        self.setMinimumWidth(700) # TODO: not hardcoded
         apply_stylesheet(self, theme='dark_purple.xml')
+        # TODO: icons
 
         # Page container
         self._stacked_widget = QStackedWidget(self)

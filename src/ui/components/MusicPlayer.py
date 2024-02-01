@@ -57,7 +57,7 @@ class AudioPlayerWidget(QWidget):
         self._forward_button.clicked.connect(self._forward)
         self._forward_button.setDisabled(True)
         controls_layout.addWidget(self._forward_button)
-
+        # TODO: volume slider
         layout.addLayout(controls_layout)
 
         # Playback slider
@@ -92,7 +92,7 @@ class AudioPlayerWidget(QWidget):
         # I feel like something wrong with the combination of setSource, setSourceDevice, even though setSource isn't used
 
         # Desired implementation:
-        # self._player.setSourceDevice(QFile(path))
+        # self._player.setSourceDevice(QFile(path)) # although in ?needs? to be closed.
 
     def open_from_device(self, source_device: QIODevice):
         self.discard()

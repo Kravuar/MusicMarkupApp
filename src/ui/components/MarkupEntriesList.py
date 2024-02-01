@@ -25,8 +25,18 @@ class MarkupEntriesWidget(QWidget):
     def set_entries(self, entries: Iterable[MarkupView]):
         self._list_widget.clear()
         for view in entries:
-            label = f'{str(view.entry.entry_info.relative_path)} --- Labels: {len(view.entry.values)}'
-            item = QListWidgetItem(label, self._list_widget)
+            item = QListWidgetItem(self._entry_to_label(view), self._list_widget)
             item.setData(Qt.ItemDataRole.UserRole, view.md5)
             if view.entry.entry_info.is_corrupted:
                 item.setIcon(self.style().standardPixmap(QStyle.StandardPixmap.SP_MessageBoxCritical))
+
+    def scroll_to(self, entry: MarkupView):
+        items = self._list_widget.findItems(self._entry_to_label(entry), Qt.MatchFlag.MatchExactly)
+        if len(items) == 1:
+            item = items[0]
+            self._list_widget.setCurrentItem(item)
+            self._list_widget.scrollToItem(item)
+
+    @staticmethod
+    def _entry_to_label(view: MarkupView):
+        return f'{str(view.entry.entry_info.relative_path)} --- Labels: {len(view.entry.values)}'

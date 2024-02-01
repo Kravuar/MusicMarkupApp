@@ -42,6 +42,7 @@ class Project:
     def export_markup(self, path: Path):
         try:
             with open(path, 'wb') as file:
+                self._markup_data.update_state()
                 pickle.dump(self._markup_data.to_df(), file)
         except Exception as e:
             raise RuntimeError(f"Failed to export markup to {path}: {e}.")

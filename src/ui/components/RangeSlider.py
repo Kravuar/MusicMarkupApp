@@ -71,6 +71,7 @@ class RangeSlider(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         painter = QPainter(self)
+        # TODO: idk why is the style is just not here
 
         # Draw rule
         self.opt.initFrom(self)

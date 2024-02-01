@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Type
 
+from PySide6.QtCore import Qt
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout, QPushButton, QTabWidget, QScrollArea, \
     QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog, QGroupBox
@@ -129,11 +130,16 @@ class ProjectPage(WindowPage):
         # History
         history_group_box = QGroupBox('Existing Labels', self)
         history_layout = QVBoxLayout(history_group_box)
+        history_scroll_area = QScrollArea(self)
+        history_scroll_area.setWidgetResizable(True)
+        history_scroll_area.setMinimumHeight(300)
 
         self._history = MarkupContainerWidget(_time_label_mapper, self)
         self._history.delete_signal.connect(self._delete_markup)
-        history_layout.addWidget(self._history)
 
+        history_scroll_area.setWidget(self._history)
+
+        history_layout.addWidget(history_scroll_area)
         history_group_box.setLayout(history_layout)
         markup_layout.addWidget(history_group_box)
 
@@ -222,11 +228,11 @@ class ProjectPage(WindowPage):
             next(i for i, v in enumerate(IterationSettings.Filters.getOptions()) if v.value == current_filter_mode))
 
         # UI Synchronization
+        self._markup_entries.set_entries(self._iterator.list())
         self._prepare_entry()
         self._project_name_line_edit.setText(self._project.name)
         self._project_description_line_edit.setPlainText(self._project.description)
         self._description_input_text_edit.clear()
-        self._markup_entries.set_entries(self._iterator.list())
 
     def _create_settings_combobox(self, settings_enum: Type[SettingsEnum]):
         combobox = QComboBox(self)
@@ -262,6 +268,8 @@ class ProjectPage(WindowPage):
             )
         else:
             relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
+            self._history.set_markups(self._iterator.last_accessed_entry.entry.values, self._player.get_duration())
+            self._markup_entries.scroll_to(self._iterator.last_accessed_entry)
             self._player.open(self._project.markup_data.absolute_path(relative_path))
 
     def _save_project(self, in_existing: bool):
@@ -381,7 +389,6 @@ class ProjectPage(WindowPage):
             self._range_slider.set_range_limit(0, self._player.get_duration())
             self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
             self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
-            self._history.set_markups(self._iterator.last_accessed_entry.entry.values, self._player.get_duration())
         elif status == QMediaPlayer.MediaStatus.LoadingMedia:
             self._markup_tab_save_button.setDisabled(True)
             self._media_indicator.set_status(MediaIndicator.Status.LOADING)
