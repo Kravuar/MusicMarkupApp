@@ -16,7 +16,8 @@ class MainWindow(QMainWindow):
 
         # Style
         self.setWindowIcon(QtGui.QIcon(str(Path("resources/icon.png").resolve())))
-        self.setMinimumWidth(700) # TODO: not hardcoded
+        self.setMinimumWidth(800)  # TODO: not hardcoded
+        self.setMinimumHeight(600)  # TODO: not hardcoded
         apply_stylesheet(self, theme='dark_purple.xml')
         # TODO: icons
 

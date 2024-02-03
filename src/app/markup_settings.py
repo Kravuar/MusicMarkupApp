@@ -23,6 +23,10 @@ class SettingsEnum:
 class IterationSettings:
     class Filters(SettingsEnum):
         @staticmethod
+        def NON_CORRUPTED(view: MarkupView) -> bool:
+            return not view.entry.entry_info.is_corrupted
+
+        @staticmethod
         def ALL(view: MarkupView) -> bool:
             return True
 
@@ -33,6 +37,7 @@ class IterationSettings:
         @classmethod
         def getOptions(cls) -> Iterable[SettingsEnum.SettingsEnumEntry]:
             return [
+                SettingsEnum.SettingsEnumEntry('non_corrupted', 'Non Corrupted', cls.NON_CORRUPTED),
                 SettingsEnum.SettingsEnumEntry('all', 'All', cls.ALL),
                 SettingsEnum.SettingsEnumEntry('non_visited', 'None Visited', cls.NON_VISITED)
             ]
@@ -70,7 +75,7 @@ class IterationSettings:
     # takes view size, previous index, returns new index (default - sequential)
     index_callback: Callable[[int, int], int] = Index.SEQUENTIAL
     # filter predicate (default - all)
-    filter_predicate: Callable[[MarkupView], bool] = Filters.ALL
+    filter_predicate: Callable[[MarkupView], bool] = Filters.NON_CORRUPTED
     # key mapper for sorting (default - appearance order)
     order_by: Optional[Callable[[MarkupView], Any]] = OrderBy.APPEARANCE
     # last viewed entry

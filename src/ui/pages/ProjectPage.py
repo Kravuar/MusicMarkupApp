@@ -2,22 +2,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Type
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal, QThreadPool, QRunnable, Slot, QObject, Qt
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout, QPushButton, QTabWidget, QScrollArea, \
-    QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog, QGroupBox
+    QLabel, QLineEdit, QTextEdit, QHBoxLayout, QFormLayout, QComboBox, QFileDialog, QGroupBox, QPlainTextEdit
 
-from src.app.audio_converter import CONVERTERS
 from src.app.form_validation import show_error_message, validate_required_field
 from src.app.markup_data import MarkupValue
 from src.app.markup_iterator import MarkupIterator
 from src.app.markup_settings import IterationSettings, SettingsEnum
 from src.app.project import Project
+from src.app.text_expansion import expand_musical_description
 from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
+from src.ui.components.AudioPlayer import AudioPlayer
 from src.ui.components.MarkupContainer import MarkupContainerWidget
 from src.ui.components.MarkupEntriesList import MarkupEntriesWidget
 from src.ui.components.MediaIndicator import MediaIndicator
-from src.ui.components.MusicPlayer import AudioPlayerWidget
 from src.ui.components.RangeSlider import LabeledRangeSlider
 from src.ui.pages.WindowPage import WindowPage
 
@@ -35,9 +35,37 @@ class ProjectPage(WindowPage):
         project: Project
         path: Optional[Path] = None
 
+    class DescriptionGenerationTask(QRunnable):
+        class Signals(QObject):
+            delta_signal = Signal(str)
+            status_signal = Signal(str)
+
+        class GenerationStage:
+            STARTED = 'started'
+            FAIL = 'fail'
+            FINISHED = 'finished'
+
+        def __init__(self, initial_description: str):
+            super().__init__()
+            self._initial_input = initial_description
+            self.signals = self.Signals()
+
+        @Slot()
+        def run(self):
+            self.signals.status_signal.emit(self.GenerationStage.STARTED)
+            try:
+                deltas = expand_musical_description(self._initial_input)
+                if deltas is None:
+                    return
+                for delta in deltas:
+                    self.signals.delta_signal.emit(delta)
+                self.signals.status_signal.emit(self.GenerationStage.FINISHED)
+            except Exception:
+                self.signals.status_signal.emit(self.GenerationStage.FAIL)
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Project")
+        self.setWindowTitle("Project")
 
         # State
         self._project: Optional[Project] = None
@@ -68,16 +96,21 @@ class ProjectPage(WindowPage):
 
         # Entry info
         entry_info_group_box = QGroupBox('Current', self)
-        entry_info_layout = QHBoxLayout(entry_info_group_box)
+        entry_info_layout = QVBoxLayout(entry_info_group_box)
+        entry_label_layout = QHBoxLayout(entry_info_group_box)
+        entry_label_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         self._media_indicator = MediaIndicator(self)
-        entry_info_layout.addWidget(self._media_indicator)
+        entry_label_layout.addWidget(self._media_indicator)
         self._entry_info = QLabel(markup_tab)
-        entry_info_layout.addWidget(self._entry_info)
+        entry_label_layout.addWidget(self._entry_info)
+        entry_info_layout.addLayout(entry_label_layout)
 
-        # Playback Player
-        self._player = AudioPlayerWidget(_time_label_mapper, CONVERTERS, self)
-        self._player.mediaStatusChanged.connect(self._ui_sync)
+        # Audio Player
+        self._player = AudioPlayer(_time_label_mapper, self)
+        self._player.mediaStatusChanged.connect(self._media_load_ui_sync)
+        self._player.durationChanged.connect(self._update_range_slider)
+        self._player.durationChanged.connect(self._update_history_container_with_duration)
         entry_info_layout.addWidget(self._player)
 
         entry_info_group_box.setLayout(entry_info_layout)
@@ -95,44 +128,42 @@ class ProjectPage(WindowPage):
 
         # Description input
         description_group_box = QGroupBox('Description', self)
-        description_layout = QVBoxLayout(description_group_box)
+        description_layout = QHBoxLayout(description_group_box)
 
-        self._description_input_text_edit = QTextEdit(markup_tab)
-        self._description_input_text_edit.setMinimumHeight(250)
+        self._description_input_text_edit = QPlainTextEdit(markup_tab)
+        self._description_input_text_edit.setMinimumHeight(175)
+        self._description_input_text_edit.setMaximumHeight(250)
         description_layout.addWidget(self._description_input_text_edit)
 
         description_group_box.setLayout(description_layout)
         markup_layout.addWidget(description_group_box)
 
-        # Navigation Buttons
-        buttons_layout = QHBoxLayout(markup_tab)
+        # Control Buttons
+        buttons_layout = QVBoxLayout(markup_tab)
+
+        self._generate_button = QPushButton("Generate", markup_tab)
+        self._generate_button.setToolTip("Expand Input Description")
+        self._generate_button.clicked.connect(self._start_generating_description)
+        buttons_layout.addWidget(self._generate_button)
 
         self._markup_tab_save_button = QPushButton("Save", markup_tab)
+        self._markup_tab_save_button.setToolTip("Save Current Markup")
         self._markup_tab_save_button.clicked.connect(self._save_markup)
         buttons_layout.addWidget(self._markup_tab_save_button)
 
         next_button = QPushButton("Next", markup_tab)
+        next_button.setToolTip("Move To The Next Entry")
         next_button.clicked.connect(self._move_next)
         buttons_layout.addWidget(next_button)
 
-        markup_layout.addLayout(buttons_layout)
-
-        # Entry List
-        markup_entries_group_box = QGroupBox('Visible Entries', self)
-        markup_entries_layout = QVBoxLayout(markup_entries_group_box)
-        self._markup_entries = MarkupEntriesWidget(self)
-        self._markup_entries.itemSelected.connect(self._entry_selected)
-        self._markup_entries.setMinimumHeight(200)
-        markup_entries_layout.addWidget(self._markup_entries)
-        markup_entries_group_box.setLayout(markup_entries_layout)
-        markup_layout.addWidget(markup_entries_group_box)
+        description_layout.addLayout(buttons_layout)
 
         # History
         history_group_box = QGroupBox('Existing Labels', self)
         history_layout = QVBoxLayout(history_group_box)
-        history_scroll_area = QScrollArea(self)
+        history_scroll_area = QScrollArea(history_group_box)
         history_scroll_area.setWidgetResizable(True)
-        history_scroll_area.setMinimumHeight(300)
+        history_scroll_area.setMinimumHeight(250)
 
         self._history = MarkupContainerWidget(_time_label_mapper, self)
         self._history.delete_signal.connect(self._delete_markup)
@@ -166,6 +197,16 @@ class ProjectPage(WindowPage):
         # Iteration Index Mode
         self._index_mode_combobox = self._create_settings_combobox(IterationSettings.Index)
         markup_settings_layout.addRow("Iteration Index Mode:", self._index_mode_combobox)
+
+        # Entry List
+        markup_entries_group_box = QGroupBox('Visible Entries', self)
+        markup_entries_layout = QVBoxLayout(markup_entries_group_box)
+        self._markup_entries = MarkupEntriesWidget(self)
+        self._markup_entries.itemSelected.connect(self._entry_selected)
+        self._markup_entries.setMinimumHeight(200)  # TODO: dumb
+        markup_entries_layout.addWidget(self._markup_entries)
+        markup_entries_group_box.setLayout(markup_entries_layout)
+        markup_settings_layout.addWidget(markup_entries_group_box)
 
         # Project Details Tab
         details_tab_scroll = QScrollArea(self)
@@ -232,7 +273,7 @@ class ProjectPage(WindowPage):
         self._prepare_entry()
         self._project_name_line_edit.setText(self._project.name)
         self._project_description_line_edit.setPlainText(self._project.description)
-        self._description_input_text_edit.clear()
+        self._description_input_text_edit.setPlainText("")
 
     def _create_settings_combobox(self, settings_enum: Type[SettingsEnum]):
         combobox = QComboBox(self)
@@ -268,9 +309,10 @@ class ProjectPage(WindowPage):
             )
         else:
             relative_path = self._iterator.last_accessed_entry.entry.entry_info.relative_path
-            self._history.set_markups(self._iterator.last_accessed_entry.entry.values, self._player.get_duration())
+            self._description_input_text_edit.setPlainText("")
+            self._history.set_markups(self._iterator.last_accessed_entry.entry.values)
             self._markup_entries.scroll_to(self._iterator.last_accessed_entry)
-            self._player.open(self._project.markup_data.absolute_path(relative_path))
+            self._player.open_from_file(self._project.markup_data.absolute_path(relative_path))
 
     def _save_project(self, in_existing: bool):
         validation_errors = dict(filter(None, [
@@ -337,10 +379,10 @@ class ProjectPage(WindowPage):
 
         start, end = self._range_slider.get_range()
         markup = MarkupValue(
-                start,
-                end,
-                self._description_input_text_edit.toPlainText()
-            )
+            start,
+            end,
+            self._description_input_text_edit.toPlainText()
+        )
 
         self._project.markup_data.add(self._iterator.last_accessed_entry.md5, markup, 0)
         self._history.add_markup(markup, self._player.get_duration(), 0)
@@ -372,7 +414,6 @@ class ProjectPage(WindowPage):
         self._project = None
         self._project_path = None
         self._iterator = None
-
         self._player.discard()
 
         self._goto("main")
@@ -381,25 +422,73 @@ class ProjectPage(WindowPage):
         self._iterator.last_accessed_entry = md5
         self._prepare_entry()
 
-    def _ui_sync(self, status: QMediaPlayer.MediaStatus):
+    def _update_history_container_with_duration(self, duration: int):
+        self._history.update_markups_with_duration(duration)
+
+    def _media_load_ui_sync(self, status: str):
         self._entry_info.setText(str(self._iterator.last_accessed_entry.entry.entry_info.relative_path))
         if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            self._generate_button.setDisabled(False)
             self._markup_tab_save_button.setDisabled(False)
             self._media_indicator.set_status(MediaIndicator.Status.GOOD)
-            self._range_slider.set_range_limit(0, self._player.get_duration())
             self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
             self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
         elif status == QMediaPlayer.MediaStatus.LoadingMedia:
             self._markup_tab_save_button.setDisabled(True)
+            self._generate_button.setDisabled(True)
             self._media_indicator.set_status(MediaIndicator.Status.LOADING)
         elif status == QMediaPlayer.MediaStatus.InvalidMedia:
             self._markup_tab_save_button.setDisabled(True)
+            self._generate_button.setDisabled(True)
             self._project.markup_data.refresh_entry(self._iterator.last_accessed_entry.md5)
             if self._iterator.last_accessed_entry.entry.entry_info.is_corrupted:
                 self._media_indicator.set_status(MediaIndicator.Status.CORRUPTED)
             else:
                 self._media_indicator.set_status(MediaIndicator.Status.UNSUPPORTED)
-            self._range_slider.set_range_limit(0, self._player.get_duration())
-            self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.set_range_limit(0, 0)
+            self._range_slider.set_range(0, 0)
             self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
 
+    @Slot(str)
+    def _generation_delta_handler(self, delta: str):
+        self._description_input_text_edit.insertPlainText(delta)
+
+    @Slot(str)
+    def _generation_status_update_handler(self, stage: str):
+        if stage == self.DescriptionGenerationTask.GenerationStage.STARTED:
+            self._description_input_text_edit.setReadOnly(True)
+            self._generate_button.setDisabled(True)
+            self._generate_button.setText("Generating...")
+            self._description_input_text_edit.setPlainText("")
+            self._markup_tab_save_button.setDisabled(True)
+        else:
+            self._description_input_text_edit.setReadOnly(False)
+            self._generate_button.setDisabled(False)
+            self._generate_button.setText("Generate")
+            self._markup_tab_save_button.setDisabled(False)
+        if stage == self.DescriptionGenerationTask.GenerationStage.FAIL:
+            QMessageBox.critical(
+                self,
+                "Generation Error",
+                "Internal error occurred upon generation stage.",
+                QMessageBox.StandardButton.Ok
+            )
+
+    def _start_generating_description(self):
+        initial_description = self._description_input_text_edit.toPlainText()
+        if not initial_description:
+            QMessageBox.critical(
+                self,
+                "Generation Error",
+                "Input description should not be empty.",
+                QMessageBox.StandardButton.Ok
+            )
+        pool = QThreadPool.globalInstance()
+        task = ProjectPage.DescriptionGenerationTask(initial_description)
+        task.signals.status_signal.connect(self._generation_status_update_handler)
+        task.signals.delta_signal.connect(self._generation_delta_handler)
+        pool.start(task)
+
+    def _update_range_slider(self, duration: int):
+        self._range_slider.set_range_limit(0, duration)
+        self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
