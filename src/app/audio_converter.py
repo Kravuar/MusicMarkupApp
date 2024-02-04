@@ -17,7 +17,7 @@ class Converter(ABC):
         pass
 
 
-class MidiToMP3Converter(Converter):
+class MidiToWAVConverter(Converter):
 
     def supports_source(self, source: QIODevice) -> bool:
         is_file = isinstance(source, QFile)
@@ -36,4 +36,4 @@ class MidiToMP3Converter(Converter):
             raise IOError('Could not create file for MIDI conversion.')
 
 
-CONVERTERS = [MidiToMP3Converter()]
+CONVERTERS = [MidiToWAVConverter()]
