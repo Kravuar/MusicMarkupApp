@@ -440,6 +440,7 @@ class ProjectPage(WindowPage):
             self._markup_tab_save_button.setDisabled(False)
             self._media_indicator.set_status(MediaIndicator.Status.GOOD)
             self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
             self._range_slider.setDisabled(False)
         elif status == QMediaPlayer.MediaStatus.LoadingMedia:
             self._range_slider.set_range_limit(0, 0)

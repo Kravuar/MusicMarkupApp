@@ -49,16 +49,17 @@ class RangeSlider(QWidget):
         return self._first_position, self._second_position
 
     def set_min_range(self, min_range: int):
-        if min_range <= (self.opt.maximum - self.opt.minimum):
-            self._min_range = min_range
+        if not min_range <= (self.opt.maximum - self.opt.minimum):
+            self.set_range_limit(self.opt.minimum, self.opt.minimum + min_range)
 
-            expansion_needed = min_range - (self._second_position - self._first_position)
+        self._min_range = min_range
+        expansion_needed = min_range - (self._second_position - self._first_position)
 
-            first_new_position = max(self._first_position - expansion_needed, self.opt.minimum)
-            expansion_needed -= self._first_position - first_new_position
-            second_new_position = min(self._second_position + expansion_needed, self.opt.maximum)
+        first_new_position = max(self._first_position - expansion_needed, self.opt.minimum)
+        expansion_needed -= self._first_position - first_new_position
+        second_new_position = min(self._second_position + expansion_needed, self.opt.maximum)
 
-            self.set_range(first_new_position, second_new_position)
+        self.set_range(first_new_position, second_new_position)
 
     def set_first_tooltip(self, tooltip: str):
         self._first_tooltip = tooltip
