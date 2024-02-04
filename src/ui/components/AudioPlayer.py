@@ -7,9 +7,11 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QStyle, QLabel,
 
 
 class AudioPlayer(QWidget):
+    _DEFAULT_VOLUME = 0.3
+
     positionChanged = Signal(int)
     durationChanged = Signal(int)
-    mediaStatusChanged = Signal(str)
+    mediaStatusChanged = Signal(QMediaPlayer.MediaStatus)
 
     def __init__(self, time_label_mapper: Callable[[int], str], parent: Optional[QWidget]):
         super().__init__(parent)
@@ -30,7 +32,7 @@ class AudioPlayer(QWidget):
         buttons_layout = QHBoxLayout(self)
         self._play_pause_button = QPushButton(self)
         self._play_pause_button.clicked.connect(self.toggle_play_pause)
-        # self._play_pause_button.setDisabled(True)
+        self._play_pause_button.setDisabled(True)
         buttons_layout.addWidget(self._play_pause_button)
 
         self._rewind_button = QPushButton(self)
@@ -73,13 +75,6 @@ class AudioPlayer(QWidget):
         playback_time_layout.addWidget(self._totalTimeLabel)
 
         layout.addLayout(playback_time_layout, 8)
-
-        # self._player.errorOccurred.connect(lambda x, y: print(x, y))
-        # self._player.bufferProgressChanged.connect(lambda y: print(y))
-        # self._player.hasAudioChanged.connect(lambda y: print(y))
-        # self._player.mediaStatusChanged.connect(lambda y: print(y))
-        # self._player.positionChanged.connect(lambda y: print(y))
-        # self._player.sourceChanged.connect(lambda y: print(y))
 
     def discard(self):
         if self._player is not None:
@@ -168,9 +163,14 @@ class AudioPlayer(QWidget):
 
     def _reinit_player(self):
         # Maybe this is how It's supposed to work?
+        self._playback_slider.setValue(0)
+        self._hide_show_timestamps(False)
+        self._enable_controls(False)
+        self._update_play_pause_to_play()
+
         self._player = QMediaPlayer(self)
+        volume = self._audio_output.volume() if self._audio_output else self._DEFAULT_VOLUME
         self._audio_output = QAudioOutput(self._player)
-        self._player.setLoops(QMediaPlayer.Loops.Infinite)
         self._player.setAudioOutput(self._audio_output)
 
         self._player.positionChanged.connect(self._update_slider_position)
@@ -184,8 +184,8 @@ class AudioPlayer(QWidget):
         self._player.mediaStatusChanged.connect(self.mediaStatusChanged.emit)
         self._player.playingChanged.connect(self._update_play_pause_ui)
 
-        self._audio_output.volumeChanged.connect(lambda volume: self._update_volume_slider(volume * 100))
-        self._audio_output.setVolume(0.3)
+        self._audio_output.volumeChanged.connect(lambda v: self._update_volume_slider(v * 100))
+        self._audio_output.setVolume(volume)
 
     # class ConverterTask(QRunnable):
     #     class Signals(QObject):

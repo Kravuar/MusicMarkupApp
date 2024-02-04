@@ -48,11 +48,11 @@ class RangeSlider(QWidget):
     def get_range(self):
         return self._first_position, self._second_position
 
-    def set_min_range(self, min_range_in_ms: int):
-        if min_range_in_ms <= (self.opt.maximum - self.opt.minimum):
-            self._min_range = min_range_in_ms
+    def set_min_range(self, min_range: int):
+        if min_range <= (self.opt.maximum - self.opt.minimum):
+            self._min_range = min_range
 
-            expansion_needed = min_range_in_ms - (self._second_position - self._first_position)
+            expansion_needed = min_range - (self._second_position - self._first_position)
 
             first_new_position = max(self._first_position - expansion_needed, self.opt.minimum)
             expansion_needed -= self._first_position - first_new_position
@@ -211,8 +211,8 @@ class LabeledRangeSlider(QWidget):
     def set_range(self, start: int, end: int):
         self._slider.set_range(start, end)
 
-    def set_min_range(self, min_range_in_ms: int):
-        self._slider.set_min_range(min_range_in_ms)
+    def set_min_range(self, min_range: int):
+        self._slider.set_min_range(min_range)
 
     def get_range(self):
         return self._slider.get_range()

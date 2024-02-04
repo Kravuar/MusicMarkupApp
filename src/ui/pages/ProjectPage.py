@@ -13,7 +13,7 @@ from src.app.markup_iterator import MarkupIterator
 from src.app.markup_settings import IterationSettings, SettingsEnum
 from src.app.project import Project
 from src.app.text_expansion import expand_musical_description
-from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER
+from src.config import SAVE_PROJECT_AS_FILE_FILTER, SAVE_DATAFRAME_AS_FILE_FILTER, DESCRIPTION_INPUT_PLACEHOLDER
 from src.ui.components.AudioPlayer import AudioPlayer
 from src.ui.components.MarkupContainer import MarkupContainerWidget
 from src.ui.components.MarkupEntriesList import MarkupEntriesWidget
@@ -48,19 +48,23 @@ class ProjectPage(WindowPage):
         def __init__(self, initial_description: str):
             super().__init__()
             self._initial_input = initial_description
+            self._proceed = True
             self.signals = self.Signals()
+
+        def cancel(self):
+            self._proceed = False
 
         @Slot()
         def run(self):
             self.signals.status_signal.emit(self.GenerationStage.STARTED)
             try:
                 deltas = expand_musical_description(self._initial_input)
-                if deltas is None:
-                    return
                 for delta in deltas:
-                    self.signals.delta_signal.emit(delta)
+                    if self._proceed:
+                        self.signals.delta_signal.emit(delta)
                 self.signals.status_signal.emit(self.GenerationStage.FINISHED)
-            except Exception:
+            except Exception as e:
+                print(e)
                 self.signals.status_signal.emit(self.GenerationStage.FAIL)
 
     def __init__(self):
@@ -71,6 +75,7 @@ class ProjectPage(WindowPage):
         self._project: Optional[Project] = None
         self._project_path: Optional[Path] = None
         self._iterator: Optional[MarkupIterator] = None
+        self._generation_task: Optional[ProjectPage.DescriptionGenerationTask] = None
 
         # Layout
         layout = QVBoxLayout(self)
@@ -131,6 +136,7 @@ class ProjectPage(WindowPage):
         description_layout = QHBoxLayout(description_group_box)
 
         self._description_input_text_edit = QPlainTextEdit(markup_tab)
+        self._description_input_text_edit.setPlaceholderText(DESCRIPTION_INPUT_PLACEHOLDER)
         self._description_input_text_edit.setMinimumHeight(175)
         self._description_input_text_edit.setMaximumHeight(250)
         description_layout.addWidget(self._description_input_text_edit)
@@ -143,7 +149,7 @@ class ProjectPage(WindowPage):
 
         self._generate_button = QPushButton("Generate", markup_tab)
         self._generate_button.setToolTip("Expand Input Description")
-        self._generate_button.clicked.connect(self._start_generating_description)
+        self._generate_button.clicked.connect(self._toggle_generation)
         buttons_layout.addWidget(self._generate_button)
 
         self._markup_tab_save_button = QPushButton("Save", markup_tab)
@@ -270,6 +276,7 @@ class ProjectPage(WindowPage):
 
         # UI Synchronization
         self._markup_entries.set_entries(self._iterator.list())
+        self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
         self._prepare_entry()
         self._project_name_line_edit.setText(self._project.name)
         self._project_description_line_edit.setPlainText(self._project.description)
@@ -411,10 +418,10 @@ class ProjectPage(WindowPage):
         elif answer == QMessageBox.StandardButton.Cancel:
             return
 
+        self._player.discard()
         self._project = None
         self._project_path = None
         self._iterator = None
-        self._player.discard()
 
         self._goto("main")
 
@@ -425,15 +432,19 @@ class ProjectPage(WindowPage):
     def _update_history_container_with_duration(self, duration: int):
         self._history.update_markups_with_duration(duration)
 
-    def _media_load_ui_sync(self, status: str):
+    @Slot(QMediaPlayer.MediaStatus)
+    def _media_load_ui_sync(self, status: QMediaPlayer.MediaStatus):
         self._entry_info.setText(str(self._iterator.last_accessed_entry.entry.entry_info.relative_path))
         if status == QMediaPlayer.MediaStatus.LoadedMedia:
             self._generate_button.setDisabled(False)
             self._markup_tab_save_button.setDisabled(False)
             self._media_indicator.set_status(MediaIndicator.Status.GOOD)
             self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
-            self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.setDisabled(False)
         elif status == QMediaPlayer.MediaStatus.LoadingMedia:
+            self._range_slider.set_range_limit(0, 0)
+            self._range_slider.set_range(0, 0)
+            self._range_slider.setDisabled(True)
             self._markup_tab_save_button.setDisabled(True)
             self._generate_button.setDisabled(True)
             self._media_indicator.set_status(MediaIndicator.Status.LOADING)
@@ -447,25 +458,32 @@ class ProjectPage(WindowPage):
                 self._media_indicator.set_status(MediaIndicator.Status.UNSUPPORTED)
             self._range_slider.set_range_limit(0, 0)
             self._range_slider.set_range(0, 0)
-            self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+            self._range_slider.setDisabled(True)
 
     @Slot(str)
     def _generation_delta_handler(self, delta: str):
         self._description_input_text_edit.insertPlainText(delta)
 
+    def _on_generation_start(self):
+        self._description_input_text_edit.setReadOnly(True)
+        self._description_input_text_edit.setPlainText("")
+        self._description_input_text_edit.setPlaceholderText("Generating...")
+        self._generate_button.setText("Cancel")
+        self._markup_tab_save_button.setDisabled(True)
+
+    def _on_generation_end(self):
+        self._description_input_text_edit.setReadOnly(False)
+        self._generate_button.setDisabled(False)
+        self._generate_button.setText("Generate")
+        self._description_input_text_edit.setPlaceholderText(DESCRIPTION_INPUT_PLACEHOLDER)
+        self._markup_tab_save_button.setDisabled(False)
+
     @Slot(str)
     def _generation_status_update_handler(self, stage: str):
         if stage == self.DescriptionGenerationTask.GenerationStage.STARTED:
-            self._description_input_text_edit.setReadOnly(True)
-            self._generate_button.setDisabled(True)
-            self._generate_button.setText("Generating...")
-            self._description_input_text_edit.setPlainText("")
-            self._markup_tab_save_button.setDisabled(True)
+            self._on_generation_start()
         else:
-            self._description_input_text_edit.setReadOnly(False)
-            self._generate_button.setDisabled(False)
-            self._generate_button.setText("Generate")
-            self._markup_tab_save_button.setDisabled(False)
+            self._on_generation_end()
         if stage == self.DescriptionGenerationTask.GenerationStage.FAIL:
             QMessageBox.critical(
                 self,
@@ -474,21 +492,32 @@ class ProjectPage(WindowPage):
                 QMessageBox.StandardButton.Ok
             )
 
-    def _start_generating_description(self):
-        initial_description = self._description_input_text_edit.toPlainText()
-        if not initial_description:
-            QMessageBox.critical(
-                self,
-                "Generation Error",
-                "Input description should not be empty.",
-                QMessageBox.StandardButton.Ok
-            )
-        pool = QThreadPool.globalInstance()
-        task = ProjectPage.DescriptionGenerationTask(initial_description)
-        task.signals.status_signal.connect(self._generation_status_update_handler)
-        task.signals.delta_signal.connect(self._generation_delta_handler)
-        pool.start(task)
+    def _toggle_generation(self):
+        if self._generation_task:
+            self._cancel_generation()
+        else:
+            initial_description = self._description_input_text_edit.toPlainText()
+            if not initial_description:
+                QMessageBox.critical(
+                    self,
+                    "Generation Error",
+                    "Input description should not be empty.",
+                    QMessageBox.StandardButton.Ok
+                )
+            pool = QThreadPool.globalInstance()
+            self._generation_task = ProjectPage.DescriptionGenerationTask(initial_description)
+            self._generation_task.signals.status_signal.connect(self._generation_status_update_handler)
+            self._generation_task.signals.delta_signal.connect(self._generation_delta_handler)
+            pool.start(self._generation_task)
+
+    def _cancel_generation(self):
+        if self._generation_task:
+            self._generation_task.cancel()
+            self._generation_task.signals.status_signal.disconnect(self._generation_status_update_handler)
+            self._generation_task.signals.delta_signal.disconnect(self._generation_delta_handler)
+            self._generation_task = None
+            self._on_generation_end()
 
     def _update_range_slider(self, duration: int):
         self._range_slider.set_range_limit(0, duration)
-        self._range_slider.set_min_range(self._project.markup_settings.min_duration_in_ms)
+        self._range_slider.set_range(0, self._project.markup_settings.min_duration_in_ms)
